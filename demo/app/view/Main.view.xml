@@ -1,0 +1,20 @@
+<mvc:View controllerName="demo.app.controller.Main" displayBlock="true" height="100%"
+	xmlns:mvc="sap.ui.core.mvc" xmlns="sap.m" xmlns:core="sap.ui.core">
+	<Page id="page" title="{i18n>title}">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<Label text="{i18n>nameLabel}" labelFor="name"/>
+				<Input id="name" value="{/name}" valueLiveUpdate="true"/>
+				<Text id="greeting" text="Hello {/name}!"/>
+				<DatePicker id="date" value="{/date}" valueFormat="yyyy-MM-dd" displayFormat="long"/>
+				<Select id="select" selectedKey="{/selected}" items="{/items}">
+					<core:Item key="{key}" text="{text}"/>
+				</Select>
+				<Button id="toast" text="{i18n>button}" type="Emphasized" press=".onPress"/>
+			</VBox>
+			<List id="list" headerText="Libraries" items="{/items}">
+				<StandardListItem title="{text}" description="{key}" icon="sap-icon://product"/>
+			</List>
+		</content>
+	</Page>
+</mvc:View>

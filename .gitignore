@@ -1,0 +1,6 @@
+node_modules
+dist
+demo/*.png
+demo/import-all.json
+demo/import-all-result.json
+.DS_Store

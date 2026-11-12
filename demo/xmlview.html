@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>UI5 Next: XML view demo</title>
+	<script type="module">
+		import { boot } from "../dist/ui5-next-boot.js";
+
+		await boot({ theme: "sap_horizon", language: "en" });
+		// app namespace -> URL, like data-sap-ui-resourceroots
+		sap.ui.loader.config({ paths: { "demo/app": new URL("./app/", import.meta.url).href } });
+
+		const [{ default: XMLView }, { default: JSONModel }, { default: ResourceModel }, { default: ResourceBundle }] = await Promise.all([
+			import("../dist/sap/ui/core/mvc/XMLView.js"),
+			import("../dist/sap/ui/model/json/JSONModel.js"),
+			import("../dist/sap/ui/model/resource/ResourceModel.js"),
+			import("../dist/sap/base/i18n/ResourceBundle.js"),
+		]);
+		const bundle = await ResourceBundle.create({
+			url: new URL("./app/i18n/i18n.properties", import.meta.url).href, async: true, supportedLocales: [""], fallbackLocale: "",
+		});
+		const view = await XMLView.create({ viewName: "demo.app.view.Main" });
+		view.setModel(new JSONModel({
+			name: "World", date: "2026-11-12", selected: "sap.m",
+			items: [{ key: "sap.m", text: "Mobile controls" }, { key: "sap.ui.core", text: "Core" }, { key: "sap.ui.unified", text: "Unified" }],
+		}));
+		view.setModel(new ResourceModel({ bundle, async: true }), "i18n");
+		view.placeAt("content");
+		await new Promise((r) => view.addEventDelegate({ onAfterRendering: r }));
+
+		// checks, read by scripts/smoke.mjs
+		// a user-like click (UI5 listens to mousedown/mouseup/click, not just click)
+		const click = (el) => {
+			const r = el.getBoundingClientRect();
+			const o = { bubbles: true, cancelable: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, button: 0 };
+			for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+				el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, o) : new MouseEvent(type, o));
+			}
+		};
+		window.__smoke = async () => {
+			const byId = (id) => view.byId(id);
+			byId("name").setValue("UI5 Next");
+			byId("name").fireLiveChange({ value: "UI5 Next" });
+			byId("name").fireChange({ value: "UI5 Next" });
+			await new Promise((r) => setTimeout(r, 100));
+			click(document.getElementById(byId("toast").getId()));
+			await new Promise((r) => setTimeout(r, 300));
+			byId("date").openBy(); // lazy-loads sap.ui.unified (Calendar) through sap.ui.require
+			for (let i = 0; i < 40 && !document.querySelector(".sapUiCal"); i++) await new Promise((r) => setTimeout(r, 100));
+			const calendar = document.querySelector(".sapUiCal .sapUiCalItemSel")?.getAttribute("aria-label");
+			return {
+				calendar,
+				title: document.querySelector(".sapMTitle")?.textContent,
+				greeting: document.getElementById(byId("greeting").getId())?.textContent,
+				datePickerShows: document.getElementById(byId("date").getId() + "-inner")?.value,
+				selectShows: document.querySelector(".sapMSlt .sapMSltLabel")?.textContent?.trim(),
+				listItems: document.querySelectorAll(".sapMLIB").length,
+				icon: [...document.querySelectorAll(".sapUiIcon")].map((i) => i.getAttribute("data-sap-ui-icon-content")?.codePointAt(0)?.toString(16) + "/" + getComputedStyle(i).fontFamily).slice(0, 2),
+				toast: document.querySelector(".sapMMessageToast")?.textContent,
+				ok: !!calendar && !!document.querySelector(".sapMMessageToast"),
+				log: sap.ui.require("sap/base/Log")?.getLogEntries().filter((e) => e.level <= 2).map((e) => e.message).slice(-5),
+			};
+		};
+		document.body.dataset.ui5Next = "ready";
+	</script>
+</head>
+<body class="sapUiBody" style="height:100vh;margin:0">
+	<div id="content" style="height:100%"></div>
+</body>
+</html>
