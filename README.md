@@ -20,6 +20,16 @@ npm run serve
 Open [http://localhost:8080/](http://localhost:8080/) for the demo. The ESM and bundle versions
 are available at `/esm/` and `/bundles/`.
 
+## CI and releases
+
+Pushes and pull requests to `main` run the build and tests on Node 26, with npm dependency caching.
+Each run makes the generated `dist/` files available as a downloadable GitHub Actions artifact.
+
+Releasing is manual: run the **Build, test and deploy** workflow from `main` and provide a new
+semantic version. It publishes that version to npm and creates a GitHub Release with the same
+package tarball attached. Ordinary commits never publish a new version. The deploy job requires
+the repository's `NPM_TOKEN` secret.
+
 ## Output
 
 - `dist/esm/` — one ES module per UI5 module

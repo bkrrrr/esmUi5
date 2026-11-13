@@ -1,31 +1,22 @@
-name: CI
+name: Build, test and deploy
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New semantic version to publish (for example, 1.2.3)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [24.x, 26.x]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm test
-
-  build-and-smoke:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,9 +28,77 @@ jobs:
       - run: npm run build
       - run: npm run check
       - run: npm run check:build-report
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esm-ui5-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.x
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: esm-ui5-dist
+          path: dist/
+      - run: npm test
       - uses: browser-actions/setup-chrome@v2
         id: chrome
       - run: npm run demo:check
         env:
           REQUIRE_BROWSER: "1"
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+
+  deploy:
+    needs: [build, test]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Deploy must be dispatched from main (got $GITHUB_REF)." >&2
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.x
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: esm-ui5-dist
+          path: dist/
+      - name: Validate and set release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+      - name: Pack npm package
+        id: pack
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          npm pack --ignore-scripts
+          echo "file=esm-ui5-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+      - name: Publish to npm
+        run: npm publish "${{ steps.pack.outputs.file }}" --ignore-scripts --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: esmUi5 ${{ inputs.version }}
+          generate_release_notes: true
+          files: ${{ steps.pack.outputs.file }}
