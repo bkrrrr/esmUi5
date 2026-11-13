@@ -32,21 +32,30 @@ export function checkDom(dom) {
 function dumpDom(browser, url) {
 	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-demo-check-"));
 	return new Promise((resolve) => {
+		const ciFlags = process.env.CI ? ["--no-sandbox", "--disable-dev-shm-usage"] : [];
 		const child = spawn(browser, [
-			"--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+			"--headless", "--disable-gpu", ...ciFlags, "--no-first-run", "--no-default-browser-check",
 			`--user-data-dir=${profile}`, `--virtual-time-budget=${BUDGET_MS}`, "--dump-dom", url,
 		], { stdio: ["ignore", "pipe", "pipe"] });
 		let out = "";
+		let stderr = "";
+		let spawnError = null;
+		let timedOut = false;
 		child.stdout.on("data", (d) => (out += d));
-		const timer = setTimeout(() => child.kill("SIGKILL"), BUDGET_MS + 60000);
-		child.on("close", (code) => {
+		child.stderr.on("data", (d) => (stderr += d));
+		child.on("error", (err) => (spawnError = err));
+		const timer = setTimeout(() => {
+			timedOut = true;
+			child.kill("SIGKILL");
+		}, BUDGET_MS + 60000);
+		child.on("close", (code, signal) => {
 			clearTimeout(timer);
 			try {
 				fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
 			} catch {
 				/* temp dir */
 			}
-			resolve({ code, dom: out });
+			resolve({ code, signal, dom: out, stderr, spawnError, timedOut });
 		});
 	});
 }
@@ -73,12 +82,19 @@ export async function main({ browser = findBrowser(), distDir = dist, required =
 	let failed = 0;
 	for (const p of PAGES) {
 		const t0 = Date.now();
-		const { code, dom } = await dumpDom(browser, base + p);
+		const { code, signal, dom, stderr, spawnError, timedOut } = await dumpDom(browser, base + p);
 		const r = checkDom(dom);
 		console.log(`  ${r.ok ? "ok  " : "FAIL"} ${p}: title ${r.title ? "rendered" : "missing"}, ${r.listItems} list items (${Date.now() - t0} ms)`);
-		if (code !== 0) console.error(`       Chrome exited with status ${code}`);
+		if (code !== 0 || signal || spawnError || timedOut) {
+			if (spawnError) console.error(`       could not start Chrome: ${spawnError.message}`);
+			else if (signal) console.error(`       Chrome was terminated by ${signal}`);
+			else console.error(`       Chrome exited with status ${code}`);
+			if (timedOut) console.error("       Chrome demo check timed out");
+			const details = stderr.trim().split(/\r?\n/).slice(-8);
+			if (details.length) console.error(`       Chrome stderr:\n              ${details.join("\n              ")}`);
+		}
 		if (r.error) console.log(`       error: ${r.error.split("\n").slice(0, 4).join("\n              ")}`);
-		if (!r.ok || code !== 0) failed++;
+		if (!r.ok || code !== 0 || signal || spawnError || timedOut) failed++;
 	}
 	server.close();
 	return failed ? 1 : 0;
