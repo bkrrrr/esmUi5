@@ -1,4 +1,4 @@
-// UI5 Next runtime shim (dist/runtime/ui5-next-runtime.js): the loader API for dynamic code
+// esmUi5 runtime shim (dist/runtime/esm-ui5-runtime.js): the loader API for dynamic code
 // (view/controller names, lazy libraries) plus the small part of the legacy loader API
 // (sap.ui.loader) that UI5 itself still calls. Dependency free. It does not recreate
 // namespace globals (sap.m.Button, ...).
@@ -35,10 +35,10 @@ const dirUrl = (u) => {
 };
 
 function moduleName(name) {
-	if (typeof name !== "string" || !name) throw new TypeError(`ui5-next-runtime: invalid module name ${String(name)}`);
+	if (typeof name !== "string" || !name) throw new TypeError(`esm-ui5-runtime: invalid module name ${String(name)}`);
 	if (name.startsWith("./") || name.startsWith("../")) {
 		throw new Error(
-			`ui5-next-runtime: relative module name "${name}" is not supported (there is no calling-module context); ` +
+			`esm-ui5-runtime: relative module name "${name}" is not supported (there is no calling-module context); ` +
 			`use a root-relative name such as "sap/m/Button" or a static import`
 		);
 	}
@@ -61,7 +61,7 @@ function setPath(prefix, url) {
  */
 export function init(options = {}) {
 	if (options.mode !== undefined) {
-		if (options.mode !== "esm" && options.mode !== "bundles") throw new Error(`ui5-next-runtime: unknown mode "${options.mode}"`);
+		if (options.mode !== "esm" && options.mode !== "bundles") throw new Error(`esm-ui5-runtime: unknown mode "${options.mode}"`);
 		state.mode = options.mode;
 	}
 	if (options.esmBase) state.esmBase = dirUrl(options.esmBase);
@@ -111,7 +111,7 @@ function valueOf(entry) {
 
 function loadModulesJson() {
 	modulesJson ??= Promise.resolve(state.fetch(new URL("modules.json", state.bundlesBase).href)).then((r) => {
-		if (!r.ok) throw new Error(`ui5-next-runtime: cannot load ${state.bundlesBase}modules.json (${r.status})`);
+		if (!r.ok) throw new Error(`esm-ui5-runtime: cannot load ${state.bundlesBase}modules.json (${r.status})`);
 		return r.json();
 	});
 	return modulesJson;
@@ -202,7 +202,7 @@ export function require(names, cb, errCb) {
 
 /** toUrl("sap/m/themes") -> absolute URL of a resource. */
 export function toUrl(name) {
-	if (typeof name !== "string") throw new TypeError("ui5-next-runtime: invalid resource name");
+	if (typeof name !== "string") throw new TypeError("esm-ui5-runtime: invalid resource name");
 	if (name.startsWith("./") || name.startsWith("../")) moduleName(name); // throws
 	return resourceUrl(name.replace(/^\/+/, ""));
 }
@@ -220,8 +220,8 @@ require.preload = preload;
 // ---- sap.ui.loader compatibility (used by UI5 1.x internals) ----
 const logger = {
 	debug() {}, info() {}, isLoggable: () => false,
-	warning: (...a) => console.warn("[ui5-next]", ...a),
-	error: (...a) => console.error("[ui5-next]", ...a),
+	warning: (...a) => console.warn("[esm-ui5]", ...a),
+	error: (...a) => console.error("[esm-ui5]", ...a),
 };
 const loaderConfig = { async: true, amd: false, noConflict: true };
 

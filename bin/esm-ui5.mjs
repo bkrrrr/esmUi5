@@ -6,7 +6,7 @@ import { bundle, MINIFIERS, DEFAULT_MINIFIER } from "../src/bundle.mjs";
 import { copyDemo, writeDistReadme } from "../src/demo.mjs";
 import { serve } from "../src/serve.mjs";
 
-const usage = `Usage: ui5-next <command> [options]
+const usage = `Usage: esm-ui5 <command> [options]
 
 Commands:
   esm      merge @openui5 packages, convert to ES modules, thirdparty wrappers, package
@@ -75,6 +75,6 @@ try {
 	if (command === "demo" || command === "all") copyDemo({ out });
 	if (command === "serve") await serve({ root: out, port: Number(args.port) });
 } catch (err) {
-	console.error(`ui5-next: ${err.message}`);
+	console.error(`esm-ui5: ${err.message}`);
 	process.exit(1);
 }

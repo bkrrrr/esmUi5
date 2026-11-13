@@ -1,4 +1,4 @@
-// Pure helpers for the parts of the legacy UI5 bootstrap that UI5 Next replaces:
+// Pure helpers for the parts of the legacy UI5 bootstrap that esmUi5 replaces:
 //  - modules that ui5loader-autoconfig.js defines inline (configuration providers)
 //  - the loader's thirdparty "shim" configuration (exports/deps of classic scripts)
 //  - ES module wrappers for classic thirdparty scripts
@@ -119,7 +119,7 @@ export function analyseAutoconfig(code) {
 			} else {
 				define = `sap.ui.define(${src(code, deps)}, ${src(code, factory)});\n`;
 			}
-			result.modules.set(name.value, `/* extracted from ui5loader-autoconfig.js by ui5-next */\n${prelude}${define}`);
+			result.modules.set(name.value, `/* extracted from ui5loader-autoconfig.js by esm-ui5 */\n${prelude}${define}`);
 		}
 
 		// ui5loader.config({ ..., map, shim })
@@ -228,7 +228,7 @@ export function origEnvelope(src, global) {
 	src = globalizeSloppyThis(src);
 	const simple = global && /^[A-Za-z_$][\w$]*$/.test(global) ? global : null;
 	return (
-		`/* Modified by ui5-next: the original script, wrapped to run as an ES module (this === globalThis). */\n` +
+		`/* Modified by esm-ui5: the original script, wrapped to run as an ES module (this === globalThis). */\n` +
 		`(function (module, exports, define, require) {\n${src.replace(/\s*$/, "")}\n` +
 		(simple ? `;if (typeof ${simple} !== "undefined" && globalThis[${JSON.stringify(simple)}] === undefined) globalThis[${JSON.stringify(simple)}] = ${simple};\n` : "") +
 		`}).call(globalThis);\n`
@@ -236,7 +236,7 @@ export function origEnvelope(src, global) {
 }
 
 /** Apache-2.0 §4(b): modified files carry a notice that they were changed. */
-export const MODIFIED_NOTICE = "/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */";
+export const MODIFIED_NOTICE = "/* Modified by esm-ui5: converted from the OpenUI5 AMD source to an ES module. */";
 
 const LEADING_COMMENTS = /^(?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*))*[ \t]*\r?\n?/;
 

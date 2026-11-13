@@ -50,4 +50,4 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          echo "Published ui5-next@$VERSION from $GITHUB_SHA on $GITHUB_REF." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published esm-ui5@$VERSION from $GITHUB_SHA on $GITHUB_REF." >> "$GITHUB_STEP_SUMMARY"

@@ -1,14 +1,14 @@
 {
-  "name": "ui5-next",
+  "name": "esm-ui5",
   "version": "0.1.0",
-  "description": "Builds OpenUI5 into one tree of native ES modules (UI5 Next)",
+  "description": "Builds OpenUI5 into one tree of native ES modules (esmUi5)",
   "type": "module",
   "files": [
     "dist",
     "README.md"
   ],
   "exports": {
-    ".": "./dist/runtime/ui5-next-runtime.js",
+    ".": "./dist/runtime/esm-ui5-runtime.js",
     "./*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -17,13 +17,13 @@
   },
   "scripts": {
     "prepack": "npm run build",
-    "build": "node bin/ui5-next.mjs all --clean",
-    "build:esm": "node bin/ui5-next.mjs esm --clean",
-    "build:bundles": "node bin/ui5-next.mjs bundle",
-    "build:demo": "node bin/ui5-next.mjs demo",
+    "build": "node bin/esm-ui5.mjs all --clean",
+    "build:esm": "node bin/esm-ui5.mjs esm --clean",
+    "build:bundles": "node bin/esm-ui5.mjs bundle",
+    "build:demo": "node bin/esm-ui5.mjs demo",
     "bundle:compare": "node scripts/bundle-compare.mjs",
     "demo:check": "node scripts/demo-check.mjs",
-    "serve": "node bin/ui5-next.mjs serve --out dist/demo",
+    "serve": "node bin/esm-ui5.mjs serve --out dist/demo",
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-dist.mjs dist/esm",
     "check:build-report": "node scripts/check-build-report.mjs",

@@ -16,7 +16,7 @@ import { findBrowser } from "../src/chrome.mjs";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dist = path.resolve(process.env.DIST ?? path.join(root, "dist"));
 const PAGES = ["demo/esm/index.html", "demo/bundles/index.html"];
-const TITLE = "UI5 Next Todo";
+const TITLE = "esmUi5 Todo";
 const BUDGET_MS = Number(process.env.VIRTUAL_TIME_BUDGET ?? 60000);
 
 export { findBrowser };
@@ -25,12 +25,12 @@ export { findBrowser };
 export function checkDom(dom) {
 	const title = new RegExp(`class="[^"]*sapMTitle[^"]*"[^>]*>(?:<[^>]+>)*\\s*${TITLE}`).test(dom);
 	const listItems = (dom.match(/<li[^>]*class="[^"]*sapMLIB[^"]*"/g) ?? []).length;
-	const error = /<pre id="ui5-next-error">([\s\S]*?)<\/pre>/.exec(dom)?.[1]?.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+	const error = /<pre id="esm-ui5-error">([\s\S]*?)<\/pre>/.exec(dom)?.[1]?.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 	return { title, listItems, error: error ?? null, ok: title && listItems > 0 && !error };
 }
 
 function dumpDom(browser, url) {
-	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-demo-check-"));
+	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-demo-check-"));
 	return new Promise((resolve) => {
 		const child = spawn(browser, [
 			"--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",

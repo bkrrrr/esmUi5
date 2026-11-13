@@ -23,7 +23,7 @@ for (const d of [LAYOUT.esm, LAYOUT.runtime, LAYOUT.demo, LAYOUT.reports]) {
 const kib = (n) => (n / 1024).toFixed(0).padStart(8) + " KiB";
 const rows = [];
 for (const minifier of MINIFIERS) {
-	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `ui5-next-compare-${minifier}-`));
+	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `esm-ui5-compare-${minifier}-`));
 	for (const d of [LAYOUT.esm, LAYOUT.runtime, LAYOUT.demo]) fs.symlinkSync(path.join(dist, d), path.join(tmp, d), "dir");
 	fs.cpSync(path.join(dist, LAYOUT.reports), path.join(tmp, LAYOUT.reports), { recursive: true });
 	process.stdout.write(`${minifier}: bundling ... `);

@@ -24,7 +24,7 @@ export function findBrowser() {
 /** Start headless Chrome; returns { send, listeners, newPage, close }. */
 export async function startChrome(browser, extraArgs = []) {
 	if (typeof WebSocket === "undefined") throw new Error("needs Node >= 22 (global WebSocket)");
-	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-chrome-"));
+	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-chrome-"));
 	const child = spawn(browser, [
 		"--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
 		"--no-first-run", "--no-default-browser-check", "--window-size=1200,800", ...extraArgs, "about:blank",

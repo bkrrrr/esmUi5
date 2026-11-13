@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Minimal static file server for trying UI5 Next: node scripts/serve.mjs [root] [port]
+// Minimal static file server for trying esmUi5: node scripts/serve.mjs [root] [port]
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";

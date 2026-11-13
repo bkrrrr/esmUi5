@@ -1,4 +1,4 @@
-// The "bundle" step: UI5 Next as shared library bundles (dist/bundles), built with Rolldown from
+// The "bundle" step: esmUi5 as shared library bundles (dist/bundles), built with Rolldown from
 // dist/esm. Designed for many apps on one UI5 (launchpad): transport per package, execution on
 // demand, chunks cut along real dependencies.
 //
@@ -9,7 +9,7 @@
 //   sap/m/Button.js, ...          one tiny facade per module, same paths as esm/: a static import
 //                                 runs exactly that module (and its dependencies)
 //   <pkg>.registry.js             lazy registry for loading by name: { "sap/m/Dialog": () => import(...) }
-//   ui5-next-bootstrap.js         config, runtime (inside sap.ui.core.js), Core
+//   esm-ui5-bootstrap.js         config, runtime (inside sap.ui.core.js), Core
 // Every module is wrapped by Rolldown (strictExecutionOrder) and runs only when something needs it,
 // like a module in a UI5 library-preload file.
 import fs from "node:fs";
@@ -29,7 +29,7 @@ export const MINIFIERS = ["rolldown", "oxc", "none"];
  */
 export const BUNDLE_EXCLUDE = [
 	{ test: /^sap\/ui\/(qunit|test)\//, reason: "test infrastructure (sets up QUnit/OPA/coverage on load)" },
-	{ test: /^sap\/ui\/core\/boot(\.js|\/_runBoot\.js|\/loadModules\.js|\/onInit\.js)$/, reason: "legacy bootstrap entry (starts a UI5 boot / loads libraries on load; replaced by ui5-next-bootstrap.js)" },
+	{ test: /^sap\/ui\/core\/boot(\.js|\/_runBoot\.js|\/loadModules\.js|\/onInit\.js)$/, reason: "legacy bootstrap entry (starts a UI5 boot / loads libraries on load; replaced by esm-ui5-bootstrap.js)" },
 	{ test: /^sap\/ui\/thirdparty\/jqueryui\/jquery-effects-/, reason: "deprecated alias module (logs a 'renamed' warning on load)" },
 ];
 // chosen by measurement (npm run bundle:compare, see README): smallest output that passes the demo check
@@ -37,7 +37,7 @@ export const DEFAULT_MINIFIER = "oxc";
 const RUNTIME_SRC = fileURLToPath(new URL("./runtime.js", import.meta.url));
 const CORE = "sap.ui.core";
 /** Notice at the top of every bundle with OpenUI5 code (a legal comment, so minifiers keep it). */
-export const BUNDLE_NOTICE = "/*! Modified by ui5-next: OpenUI5 (c) SAP SE or an SAP affiliate company, Apache-2.0; converted to ES modules, bundled and minified. Licenses: ../LICENSE, ../NOTICE, ../licenses/ */";
+export const BUNDLE_NOTICE = "/*! Modified by esm-ui5: OpenUI5 (c) SAP SE or an SAP affiliate company, Apache-2.0; converted to ES modules, bundled and minified. Licenses: ../LICENSE, ../NOTICE, ../licenses/ */";
 
 /** "@openui5/sap.m" -> "sap.m" (the bundle file name). */
 export const packageShortName = (pkg) => pkg.replace(/^@[^/]+\//, "");
@@ -181,7 +181,7 @@ export const stubSource = (file, hasDefault) => {
 export function bundlesBootstrapSources({ runtimeFile, coreFile, packages, registries = {}, preload }) {
 	const regs = Object.entries(registries).map(([pkg, file]) => `\t${JSON.stringify(pkg)}: () => import(${JSON.stringify(file.split(path.sep).join("/"))}),`);
 	const setup = [
-		`// UI5 Next bundles: setup, runs before any UI5 module`,
+		`// esmUi5 bundles: setup, runs before any UI5 module`,
 		`import { init, preload } from ${JSON.stringify(runtimeFile)};`,
 		`// module name -> package, and each package's lazy registry (loading it loads the package bundle)`,
 		`const registries = {`,
@@ -193,7 +193,7 @@ export function bundlesBootstrapSources({ runtimeFile, coreFile, packages, regis
 		``,
 	].join("\n");
 	const bootstrap = (setupFile) => [
-		`// UI5 Next bootstrap (dist/bundles/): replaces sap-ui-core.js and ui5loader. Import it first.`,
+		`// esmUi5 bootstrap (dist/bundles/): replaces sap-ui-core.js and ui5loader. Import it first.`,
 		`import ${JSON.stringify(setupFile)};`,
 		`import Core from ${JSON.stringify(coreFile)};`,
 		``,
@@ -393,7 +393,7 @@ async function runRolldown({ input, outDir, groupName, minify, sourcemap, write,
 	const bundle = await rolldown({
 		input,
 		plugins: [{
-			name: "ui5-next",
+			name: "esm-ui5",
 			resolveId(source, importer, extra) {
 				if (importer && source.startsWith(".")) {
 					const target = path.resolve(path.dirname(importer), source);
@@ -424,7 +424,7 @@ async function runRolldown({ input, outDir, groupName, minify, sourcemap, write,
 		// every module wrapped in an init function, run on first use, in ES module order
 		strictExecutionOrder: true,
 		codeSplitting: {
-			groups: [{ name: (id) => groupName(id) ?? (unknownIds.add(id), null), debugName: "ui5-next", priority: 10, includeDependenciesRecursively: false }],
+			groups: [{ name: (id) => groupName(id) ?? (unknownIds.add(id), null), debugName: "esm-ui5", priority: 10, includeDependenciesRecursively: false }],
 		},
 	};
 	const result = write ? await bundle.write(output) : await bundle.generate(output);
@@ -434,7 +434,7 @@ async function runRolldown({ input, outDir, groupName, minify, sourcemap, write,
 
 /** Kind of an output chunk: package bundle, extra bundle, facade, registry or bootstrap. */
 export function chunkKind(chunk, packages) {
-	if (chunk.name === "ui5-next-bootstrap") return "bootstrap";
+	if (chunk.name === "esm-ui5-bootstrap") return "bootstrap";
 	if (chunk.isEntry) return chunk.name.endsWith(".registry") ? "registry" : "facade";
 	if (chunk.fileName === "rolldown-runtime.js") return "runtime";
 	if (packages.includes(chunk.fileName.slice(0, -3))) return "package";
@@ -463,10 +463,10 @@ export async function bundle(opts = {}) {
 	const esmRoot = path.join(distRoot, LAYOUT.esm);
 	const reportsDir = path.join(distRoot, LAYOUT.reports);
 	const outDir = path.resolve(opts.bundlesDir ?? path.join(distRoot, LAYOUT.bundles));
-	const manifestFile = path.join(reportsDir, "ui5-next-packages.json");
+	const manifestFile = path.join(reportsDir, "esm-ui5-packages.json");
 	if (!fs.existsSync(manifestFile)) throw new Error(`no ${manifestFile}; run the esm step first`);
 	const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
-	const esmReport = JSON.parse(fs.readFileSync(path.join(reportsDir, "ui5-next-report.json"), "utf8"));
+	const esmReport = JSON.parse(fs.readFileSync(path.join(reportsDir, "esm-ui5-report.json"), "utf8"));
 	const esmFile = (rel) => path.join(esmRoot, ...rel.split("/"));
 
 	// 1. modules, dependency closure, chunks
@@ -494,7 +494,7 @@ export async function bundle(opts = {}) {
 	const packagesMap = prefixMap(namesToPkg);
 
 	// 2. sources in a temp folder: stubs, lazy registries, setup + bootstrap
-	const tmp = real(fs.mkdtempSync(path.join(os.tmpdir(), "ui5-next-bundles-")));
+	const tmp = real(fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-bundles-")));
 	const runtimeFile = path.join(distRoot, LAYOUT.runtime, RUNTIME_FILE);
 	fs.mkdirSync(path.dirname(runtimeFile), { recursive: true });
 	fs.copyFileSync(RUNTIME_SRC, runtimeFile); // shared with esm/; keep it current
@@ -529,11 +529,11 @@ export async function bundle(opts = {}) {
 		runtimeFile, coreFile: esmFile("sap/ui/core/Core.js"), packages: packagesMap, registries,
 		preload: fs.existsSync(version) ? { "sap-ui-version.json": fs.readFileSync(version, "utf8") } : {},
 	});
-	const setupFile = path.join(tmp, "ui5-next-setup.js");
-	const bootstrapFile = path.join(tmp, "ui5-next-bootstrap.js");
+	const setupFile = path.join(tmp, "esm-ui5-setup.js");
+	const bootstrapFile = path.join(tmp, "esm-ui5-bootstrap.js");
 	fs.writeFileSync(setupFile, setup);
 	fs.writeFileSync(bootstrapFile, bootstrap(setupFile));
-	if (fs.existsSync(esmFile("sap/ui/core/Core.js"))) input["ui5-next-bootstrap"] = bootstrapFile;
+	if (fs.existsSync(esmFile("sap/ui/core/Core.js"))) input["esm-ui5-bootstrap"] = bootstrapFile;
 	for (const f of [setupFile, bootstrapFile, real(runtimeFile)]) group.set(f, CORE);
 	const groupName = (id) => {
 		return group.get(id.replace(/[?#].*$/, "")) ?? null;
@@ -574,10 +574,10 @@ export async function bundle(opts = {}) {
 	// the bootstrap imports Rolldown's helper chunk and the core's library part directly: the browser
 	// fetches (and compiles off the main thread) them in parallel with sap.ui.core.js instead of
 	// discovering them later. Importing a chunk runs nothing; its modules run on first use.
-	if (finalCode["ui5-next-bootstrap.js"]) {
+	if (finalCode["esm-ui5-bootstrap.js"]) {
 		const early = ["rolldown-runtime.js", `${CORE}.lib.js`].filter((f) => finalCode[f]);
-		finalCode["ui5-next-bootstrap.js"] = early.map((f) => `import "./${f}";\n`).join("") + finalCode["ui5-next-bootstrap.js"];
-		fs.writeFileSync(path.join(outDir, "ui5-next-bootstrap.js"), finalCode["ui5-next-bootstrap.js"]);
+		finalCode["esm-ui5-bootstrap.js"] = early.map((f) => `import "./${f}";\n`).join("") + finalCode["esm-ui5-bootstrap.js"];
+		fs.writeFileSync(path.join(outDir, "esm-ui5-bootstrap.js"), finalCode["esm-ui5-bootstrap.js"]);
 	}
 	const seconds = (Date.now() - t0) / 1000;
 	fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 });
@@ -618,7 +618,7 @@ export async function bundle(opts = {}) {
 		dynamicImportsBetweenBundles: dynamics,
 		circularImports: findCycles(statics),
 		externalDynamicImports: [...missing].sort(),
-		modulesWithoutChunkGroup: [...unknownIds].filter((id) => !id.endsWith("ui5-next-bootstrap.js")).slice(0, 20),
+		modulesWithoutChunkGroup: [...unknownIds].filter((id) => !id.endsWith("esm-ui5-bootstrap.js")).slice(0, 20),
 		excludedModules: excluded,
 	};
 	writeJson(path.join(reportsDir, "bundle-report.json"), report);

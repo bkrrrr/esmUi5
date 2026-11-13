@@ -54,7 +54,7 @@ export function checkBuildReport(report, baseline) {
 }
 
 function main() {
-	const reportPath = path.resolve(process.argv[2] ?? path.join(root, "dist/reports/ui5-next-report.json"));
+	const reportPath = path.resolve(process.argv[2] ?? path.join(root, "dist/reports/esm-ui5-report.json"));
 	const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
 	const baseline = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
 	const failures = checkBuildReport(report, baseline);

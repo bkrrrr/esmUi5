@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>UI5 Next Todo (bundles/)</title>
+	<title>esmUi5 Todo (bundles/)</title>
 	<script>
 		// Optional UI5 configuration (what data-sap-ui-* attributes on the old bootstrap tag did).
 		window["sap-ui-config"] = { theme: "sap_horizon", language: "en" };
@@ -11,8 +11,8 @@
 		// Show load errors in the page (npm run demo:check reads the rendered DOM).
 		function showError(err) {
 			const pre = document.createElement("pre");
-			pre.id = "ui5-next-error";
-			pre.textContent = "UI5 Next demo failed: " + (err && err.stack || err);
+			pre.id = "esm-ui5-error";
+			pre.textContent = "esmUi5 demo failed: " + (err && err.stack || err);
 			document.body.append(pre);
 		}
 		addEventListener("error", (e) => showError(e.error || (e.target && e.target.src ? "cannot load " + e.target.src : e.message)), true);
@@ -21,7 +21,7 @@
 	<script type="module">
 		// UI5 modules come from dist/bundles/ (the same paths in esm/ and bundles/).
 		// 1. The bootstrap comes first: it configures the runtime and loads the Core before any other UI5 module.
-		import { ready, preload } from "../../bundles/ui5-next-bootstrap.js";
+		import { ready, preload } from "../../bundles/esm-ui5-bootstrap.js";
 		import ComponentContainer from "../../bundles/sap/ui/core/ComponentContainer.js";
 
 		// 2. The app's own modules and descriptor, imported statically: the browser fetches them in parallel
@@ -37,16 +37,16 @@
 			manifest,
 			async: true,
 			height: "100%",
-			componentCreated: () => (document.body.dataset.ui5Next = "ready"),
+			componentCreated: () => (document.body.dataset.esmUi5 = "ready"),
 		}).placeAt("content");
 	</script>
 	<style>
 		html, body, #content { height: 100%; margin: 0; }
-		.ui5NextMode { position: fixed; right: 1rem; bottom: 0.5rem; font: 12px sans-serif; color: #556; }
+		.esmUi5Mode { position: fixed; right: 1rem; bottom: 0.5rem; font: 12px sans-serif; color: #556; }
 	</style>
 </head>
 <body class="sapUiBody">
 	<div id="content"></div>
-	<div class="ui5NextMode">UI5 from <b>dist/bundles/</b> · <a href="../esm/index.html">esm/ version</a> · <a href="../index.html">demos</a></div>
+	<div class="esmUi5Mode">UI5 from <b>dist/bundles/</b> · <a href="../esm/index.html">esm/ version</a> · <a href="../index.html">demos</a></div>
 </body>
 </html>

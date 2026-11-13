@@ -5,8 +5,8 @@ import * as acorn from "acorn";
 
 const BASE_OPTS = { ecmaVersion: "latest", allowHashBang: true, locations: true };
 
-/** Dependency name that the build maps to the root ui5-next-runtime.js. */
-export const RUNTIME_DEP = "ui5-next-runtime";
+/** Dependency name that the build maps to the root esm-ui5-runtime.js. */
+export const RUNTIME_DEP = "esm-ui5-runtime";
 
 export function parse(src, sourceType = "script") {
 	return acorn.parse(src, { ...BASE_OPTS, sourceType });

@@ -156,10 +156,10 @@ describe("resolveSpecifier", () => {
 		assert.deepEqual(resolveSpecifier("sap/m/a.js", "sap/ui/text!./x.txt", roots), { specifier: "sap/ui/text!./x.txt", target: null, external: true });
 	});
 	test("runtime (outside the esm tree, in dist/runtime)", () => {
-		assert.deepEqual(resolveSpecifier("sap/m/a.js", "ui5-next-runtime", roots), {
-			specifier: "../../../runtime/ui5-next-runtime.js", target: "../runtime/ui5-next-runtime.js", external: false,
+		assert.deepEqual(resolveSpecifier("sap/m/a.js", "esm-ui5-runtime", roots), {
+			specifier: "../../../runtime/esm-ui5-runtime.js", target: "../runtime/esm-ui5-runtime.js", external: false,
 		});
-		assert.equal(resolveSpecifier("x.js", "ui5-next-runtime", roots).specifier, "../runtime/ui5-next-runtime.js");
+		assert.equal(resolveSpecifier("x.js", "esm-ui5-runtime", roots).specifier, "../runtime/esm-ui5-runtime.js");
 	});
 });
 
@@ -223,7 +223,7 @@ describe("legacy helpers", () => {
 	});
 	test("addRegistration keeps the header comment first", () => {
 		const code = addRegistration("/*!\n * (c)\n */\nimport A from \"./A.js\";\n\nexport default A;\n", "sap/x/Y", "../../rt.js", "./Y.js");
-		assert.equal(code, '/*!\n * (c)\n */\n/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */\nimport { _register as __ui5_register } from "../../rt.js";\nimport * as __ui5_self from "./Y.js";\nimport A from "./A.js";\n\nexport default A;\n\n__ui5_register("sap/x/Y", __ui5_self);\n');
+		assert.equal(code, '/*!\n * (c)\n */\n/* Modified by esm-ui5: converted from the OpenUI5 AMD source to an ES module. */\nimport { _register as __ui5_register } from "../../rt.js";\nimport * as __ui5_self from "./Y.js";\nimport A from "./A.js";\n\nexport default A;\n\n__ui5_register("sap/x/Y", __ui5_self);\n');
 	});
 	test("libraryManifest", () => {
 		const xml = "<library><name>sap.x</name><version>1.2.3</version><documentation>X lib</documentation><dependencies><dependency><libraryName>sap.ui.core</libraryName></dependency><dependency><libraryName>sap.m</libraryName><lazy>true</lazy></dependency></dependencies></library>";
@@ -252,7 +252,7 @@ describe("themes (less-openui5)", () => {
 		assert.equal(files["library-parameters.json"], '{"x":"1"}\n');
 	});
 	test("buildThemes: cross-library imports, inline parameters, failures are reported", async () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-themes-"));
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-themes-"));
 		const put = (rel, c) => {
 			fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
 			fs.writeFileSync(path.join(tmp, rel), c);
@@ -276,7 +276,7 @@ describe("themes (less-openui5)", () => {
 
 describe("esm step (integration)", () => {
 	test("tiny fake node_modules", async () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-"));
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-"));
 		const put = (rel, content) => {
 			const f = path.join(tmp, rel);
 			fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -328,16 +328,16 @@ describe("esm step (integration)", () => {
 		// Apache-2.0 §4: license texts and attribution travel with the output
 		assert.match(fs.readFileSync(path.join(out, "LICENSE"), "utf8"), /Apache License\s+Version 2\.0/);
 		assert.match(fs.readFileSync(path.join(out, "NOTICE"), "utf8"), /OpenUI5[\s\S]*SAP SE[\s\S]*modified/);
-		assert.deepEqual(fs.readdirSync(path.join(out, "reports")).sort(), ["ui5-next-packages.json", "ui5-next-report.json"]);
-		assert.ok(fs.existsSync(path.join(out, "runtime/ui5-next-runtime.js")));
-		assert.deepEqual(JSON.parse(esmText("package.json")), { name: "ui5-next-esm", version: "9.9.9", type: "module" });
+		assert.deepEqual(fs.readdirSync(path.join(out, "reports")).sort(), ["esm-ui5-packages.json", "esm-ui5-report.json"]);
+		assert.ok(fs.existsSync(path.join(out, "runtime/esm-ui5-runtime.js")));
+		assert.deepEqual(JSON.parse(esmText("package.json")), { name: "esm-ui5-esm", version: "9.9.9", type: "module" });
 
 		assert.deepEqual(report.packages.map((p) => p.name), ["@openui5/pkg.a", "@openui5/pkg.b"]);
 		assert.deepEqual(report.ignoredPackages.map((p) => p.name), ["@openui5/pkg.typings"]);
 		// converted modules import the runtime (dist/runtime) first and register themselves
 		assert.equal(esmText("sap/a/A.js"), [
-			"/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */",
-			'import { _register as __ui5_register } from "../../../runtime/ui5-next-runtime.js";',
+			"/* Modified by esm-ui5: converted from the OpenUI5 AMD source to an ES module. */",
+			'import { _register as __ui5_register } from "../../../runtime/esm-ui5-runtime.js";',
 			'import * as __ui5_self from "./A.js";',
 			'import B from "./B.js";',
 			"",
@@ -353,7 +353,7 @@ describe("esm step (integration)", () => {
 		assert.deepEqual(report.licenseFiles.sort(), ["LICENSE", "NOTICE", "licenses/LICENSES/MIT.txt", "licenses/LICENSE.txt", "licenses/THIRDPARTY.txt", "licenses/pkg.b/THIRDPARTY.txt"].sort());
 
 		// package manifest: every esm file -> package, first package wins
-		const manifest = JSON.parse(fs.readFileSync(path.join(out, "reports/ui5-next-packages.json"), "utf8"));
+		const manifest = JSON.parse(fs.readFileSync(path.join(out, "reports/esm-ui5-packages.json"), "utf8"));
 		assert.equal(manifest["sap/a/A.js"], "@openui5/pkg.a");
 		assert.equal(manifest["sap/b/C.js"], "@openui5/pkg.b");
 		assert.equal(manifest["sap/shared.js"], "@openui5/pkg.a");
@@ -374,11 +374,11 @@ describe("esm step (integration)", () => {
 
 		// legacy bootstrap, generated files
 		assert.deepEqual(report.obsoleteBootstrap.sort(), ["ui5loader-autoconfig.js", "ui5loader.js"]);
-		assert.deepEqual(report.extracted, ["sap/x/Inline.js", "ui5-next-autoconfig.js"]);
-		assert.match(esmText("ui5-next-autoconfig.js"), /import "\.\/sap\/x\/Inline\.js";/);
+		assert.deepEqual(report.extracted, ["sap/x/Inline.js", "esm-ui5-autoconfig.js"]);
+		assert.match(esmText("esm-ui5-autoconfig.js"), /import "\.\/sap\/x\/Inline\.js";/);
 		// the app-facing bootstrap of the esm tree
-		assert.match(esmText("ui5-next-bootstrap.js"), /import "\.\/ui5-next-setup\.js";\nimport Core from "\.\/sap\/ui\/core\/Core\.js";/);
-		assert.match(esmText("ui5-next-setup.js"), /from "\.\.\/runtime\/ui5-next-runtime\.js"/);
+		assert.match(esmText("esm-ui5-bootstrap.js"), /import "\.\/esm-ui5-setup\.js";\nimport Core from "\.\/sap\/ui\/core\/Core\.js";/);
+		assert.match(esmText("esm-ui5-setup.js"), /from "\.\.\/runtime\/esm-ui5-runtime\.js"/);
 		assert.match(esmText("sap/x/Inline.js"), /function helper\(\) \{ return 2; \}[\s\S]*export default helper\(\);/);
 		assert.deepEqual(JSON.parse(esmText("sap/a/manifest.json"))["sap.ui5"].dependencies.libs, { "sap.b": {} });
 		assert.equal(JSON.parse(esmText("sap-ui-version.json")).version, "9.9.9");

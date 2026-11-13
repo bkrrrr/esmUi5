@@ -1,4 +1,4 @@
-import { require } from "/ui5-next-runtime.js";
+import { require } from "/esm-ui5-runtime.js";
 import Log from "/sap/base/Log.js";
 
 export default function() {

@@ -2,12 +2,12 @@
 
 *Draft*
 
-**TL;DR:** ui5Next converts OpenUI5 1.154 npm packages into browser-native ES modules and builds
+**TL;DR:** esmUi5 converts OpenUI5 1.154 npm packages into browser-native ES modules and builds
 shared, lazy-loaded library bundles. The same Todo app ran 17% faster over 4G than the classic
 optimized CDN build. This is a proof of concept, not a production replacement.
 
 ```js
-import { ready } from "./dist/esm/ui5-next-bootstrap.js";
+import { ready } from "./dist/esm/esm-ui5-bootstrap.js";
 import Button from "./dist/esm/sap/m/Button.js";
 
 await ready;
@@ -99,8 +99,8 @@ The same Todo app was tested in headless Chrome over seven runs with the cache d
 
 | | Ready, local | Ready, 4G | Requests | Transferred | Script time |
 |---|---:|---:|---:|---:|---:|
-| **UI5 Next, bundles/** | **519 ms** | **1,375 ms** | 26 | **1.71 MiB** | 117 ms |
-| UI5 Next, esm/ | 894 ms | 3,203 ms | 464 | 2.19 MiB | 166 ms |
+| **esmUi5, bundles/** | **519 ms** | **1,375 ms** | 26 | **1.71 MiB** | 117 ms |
+| esmUi5, esm/ | 894 ms | 3,203 ms | 464 | 2.19 MiB | 166 ms |
 | Classic UI5, optimized CDN build | 543 ms | 1,658 ms | 24 | 1.88 MiB | 121 ms |
 | Classic UI5, unbuilt npm sources | 1,159 ms | 12,293 ms | 452 | 2.22 MiB | 686 ms |
 
@@ -127,7 +127,7 @@ The conversion made several existing assumptions visible:
 
 - **App development:** serve the generated ESM with any static server; app code can use tools such
   as Vite or Rollup without a UI5 plugin.
-- **Simpler npm dependencies:** install one `ui5-next` package containing the generated UI5 modules
+- **Simpler npm dependencies:** install one `esm-ui5` package containing the generated UI5 modules
   and themes, instead of managing many library and theme packages.
 - **Editors:** native imports enable go-to-definition, find references, completion and diagnostics.
 - **Static checks:** ESLint and TypeScript can follow regular ESM imports to catch issues before

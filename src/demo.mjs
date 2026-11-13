@@ -19,7 +19,7 @@ export function copyDemo({ out = "dist", log = (m) => console.log(m) } = {}) {
 export function writeDistReadme(out = "dist") {
 	let version = "";
 	try {
-		version = JSON.parse(fs.readFileSync(path.join(path.resolve(out), LAYOUT.reports, "ui5-next-report.json"), "utf8")).ui5Version;
+		version = JSON.parse(fs.readFileSync(path.join(path.resolve(out), LAYOUT.reports, "esm-ui5-report.json"), "utf8")).ui5Version;
 	} catch {
 		/* esm step not run */
 	}

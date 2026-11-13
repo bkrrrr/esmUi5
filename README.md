@@ -1,6 +1,6 @@
-# ui5Next
+# esmUi5
 
-ui5Next converts OpenUI5 1.154 npm packages into native browser ES modules. It builds both
+esmUi5 converts OpenUI5 1.154 npm packages into native browser ES modules. It builds both
 individual modules and lazy shared bundles, plus themes and a demo app. This is a proof of concept,
 not a production-ready replacement for the UI5 toolchain.
 
@@ -30,7 +30,7 @@ are available at `/esm/` and `/bundles/`.
 Import the bootstrap before UI5 modules:
 
 ```js
-import { ready } from "./dist/esm/ui5-next-bootstrap.js";
+import { ready } from "./dist/esm/esm-ui5-bootstrap.js";
 import Button from "./dist/esm/sap/m/Button.js";
 
 await ready;

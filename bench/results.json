@@ -15,8 +15,8 @@
   "browser": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "results": {
     "local": {
-      "next-bundles": {
-        "label": "UI5 Next, bundles/",
+      "esm-ui5-bundles": {
+        "label": "esmUi5, bundles/",
         "ok": true,
         "ready": 518.6000000014901,
         "fcp": 56,
@@ -53,7 +53,7 @@
         "errors": [],
         "requestList": [
           "app       1 KiB  /dist/demo/bundles/index.html",
-          "js        0 KiB  /dist/bundles/ui5-next-bootstrap.js",
+          "js        0 KiB  /dist/bundles/esm-ui5-bootstrap.js",
           "js        0 KiB  /dist/bundles/sap/ui/core/ComponentContainer.js",
           "js        0 KiB  /dist/demo/bundles/Component.js",
           "js        1 KiB  /dist/demo/bundles/manifest.json",
@@ -83,7 +83,7 @@
           [
             15,
             18,
-            "/dist/bundles/ui5-next-bootstrap.js"
+            "/dist/bundles/esm-ui5-bootstrap.js"
           ],
           [
             15,
@@ -207,8 +207,8 @@
           ]
         ]
       },
-      "next-esm": {
-        "label": "UI5 Next, esm/",
+      "esm-ui5-esm": {
+        "label": "esmUi5, esm/",
         "ok": true,
         "ready": 894,
         "fcp": 40,
@@ -245,13 +245,13 @@
         "errors": [],
         "requestList": [
           "app       1 KiB  /dist/demo/esm/index.html",
-          "js        1 KiB  /dist/esm/ui5-next-bootstrap.js",
+          "js        1 KiB  /dist/esm/esm-ui5-bootstrap.js",
           "js        6 KiB  /dist/esm/sap/ui/core/ComponentContainer.js",
           "js        0 KiB  /dist/demo/esm/Component.js",
           "js        1 KiB  /dist/demo/esm/manifest.json",
-          "js        1 KiB  /dist/esm/ui5-next-setup.js",
+          "js        1 KiB  /dist/esm/esm-ui5-setup.js",
           "js       30 KiB  /dist/esm/sap/ui/core/Core.js",
-          "js        4 KiB  /dist/runtime/ui5-next-runtime.js",
+          "js        4 KiB  /dist/runtime/esm-ui5-runtime.js",
           "js       10 KiB  /dist/esm/sap/ui/core/UIComponent.js",
           "js        1 KiB  /dist/demo/esm/controller/App.controller.js",
           "js        1 KiB  /dist/esm/sap/base/future.js",
@@ -378,7 +378,7 @@
           "js        1 KiB  /dist/esm/sap/ui/dom/_ready.js",
           "js        2 KiB  /dist/esm/sap/ui/core/theming/ThemeHelper.js",
           "js        1 KiB  /dist/esm/sap/base/config/MemoryConfigurationProvider.js",
-          "js        1 KiB  /dist/esm/ui5-next-autoconfig.js",
+          "js        1 KiB  /dist/esm/esm-ui5-autoconfig.js",
           "js        1 KiB  /dist/esm/sap/base/util/now.js",
           "js        5 KiB  /dist/esm/sap/base/i18n/date/TimezoneUtils.js",
           "js        1 KiB  /dist/esm/sap/ui/base/Event.js",
@@ -713,7 +713,7 @@
           [
             14,
             17,
-            "/dist/esm/ui5-next-bootstrap.js"
+            "/dist/esm/esm-ui5-bootstrap.js"
           ],
           [
             15,
@@ -733,7 +733,7 @@
           [
             31,
             38,
-            "/dist/esm/ui5-next-setup.js"
+            "/dist/esm/esm-ui5-setup.js"
           ],
           [
             31,
@@ -743,7 +743,7 @@
           [
             31,
             44,
-            "/dist/runtime/ui5-next-runtime.js"
+            "/dist/runtime/esm-ui5-runtime.js"
           ],
           [
             32,
@@ -1378,7 +1378,7 @@
           [
             98,
             197,
-            "/dist/esm/ui5-next-autoconfig.js"
+            "/dist/esm/esm-ui5-autoconfig.js"
           ],
           [
             99,
@@ -3887,8 +3887,8 @@
       }
     },
     "4g": {
-      "next-bundles": {
-        "label": "UI5 Next, bundles/",
+      "esm-ui5-bundles": {
+        "label": "esmUi5, bundles/",
         "ok": true,
         "ready": 1375.2999999970198,
         "fcp": 84,
@@ -3925,7 +3925,7 @@
         "errors": [],
         "requestList": [
           "app       1 KiB  /dist/demo/bundles/index.html",
-          "js        0 KiB  /dist/bundles/ui5-next-bootstrap.js",
+          "js        0 KiB  /dist/bundles/esm-ui5-bootstrap.js",
           "js        0 KiB  /dist/bundles/sap/ui/core/ComponentContainer.js",
           "js        0 KiB  /dist/demo/bundles/Component.js",
           "js        1 KiB  /dist/demo/bundles/manifest.json",
@@ -3955,7 +3955,7 @@
           [
             58,
             105,
-            "/dist/bundles/ui5-next-bootstrap.js"
+            "/dist/bundles/esm-ui5-bootstrap.js"
           ],
           [
             59,
@@ -4079,8 +4079,8 @@
           ]
         ]
       },
-      "next-esm": {
-        "label": "UI5 Next, esm/",
+      "esm-ui5-esm": {
+        "label": "esmUi5, esm/",
         "ok": true,
         "ready": 3203.1999999955297,
         "fcp": 88,
@@ -4117,13 +4117,13 @@
         "errors": [],
         "requestList": [
           "app       1 KiB  /dist/demo/esm/index.html",
-          "js        1 KiB  /dist/esm/ui5-next-bootstrap.js",
+          "js        1 KiB  /dist/esm/esm-ui5-bootstrap.js",
           "js        6 KiB  /dist/esm/sap/ui/core/ComponentContainer.js",
           "js        0 KiB  /dist/demo/esm/Component.js",
           "js        1 KiB  /dist/demo/esm/manifest.json",
-          "js        1 KiB  /dist/esm/ui5-next-setup.js",
+          "js        1 KiB  /dist/esm/esm-ui5-setup.js",
           "js       30 KiB  /dist/esm/sap/ui/core/Core.js",
-          "js        4 KiB  /dist/runtime/ui5-next-runtime.js",
+          "js        4 KiB  /dist/runtime/esm-ui5-runtime.js",
           "js       10 KiB  /dist/esm/sap/ui/core/UIComponent.js",
           "js        1 KiB  /dist/demo/esm/controller/App.controller.js",
           "js        1 KiB  /dist/esm/sap/base/future.js",
@@ -4163,7 +4163,7 @@
           "js        1 KiB  /dist/esm/sap/ui/core/date/CalendarWeekNumbering.js",
           "js        2 KiB  /dist/esm/sap/base/Eventing.js",
           "js        1 KiB  /dist/esm/sap/base/config/MemoryConfigurationProvider.js",
-          "js        1 KiB  /dist/esm/ui5-next-autoconfig.js",
+          "js        1 KiB  /dist/esm/esm-ui5-autoconfig.js",
           "js        1 KiB  /dist/esm/sap/ui/core/AnimationMode.js",
           "js       13 KiB  /dist/esm/sap/ui/core/Configuration.js",
           "js        2 KiB  /dist/esm/sap/ui/core/ControlBehavior.js",
@@ -4585,7 +4585,7 @@
           [
             58,
             101,
-            "/dist/esm/ui5-next-bootstrap.js"
+            "/dist/esm/esm-ui5-bootstrap.js"
           ],
           [
             58,
@@ -4605,7 +4605,7 @@
           [
             102,
             146,
-            "/dist/esm/ui5-next-setup.js"
+            "/dist/esm/esm-ui5-setup.js"
           ],
           [
             103,
@@ -4615,7 +4615,7 @@
           [
             103,
             154,
-            "/dist/runtime/ui5-next-runtime.js"
+            "/dist/runtime/esm-ui5-runtime.js"
           ],
           [
             103,
@@ -4815,7 +4815,7 @@
           [
             199,
             251,
-            "/dist/esm/ui5-next-autoconfig.js"
+            "/dist/esm/esm-ui5-autoconfig.js"
           ],
           [
             211,

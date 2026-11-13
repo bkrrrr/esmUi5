@@ -21,9 +21,9 @@ describe("lazy registry and stubs", () => {
 		const src = lazyRegistrySource([
 			{ name: "sap/m/Button", stub: "/t/stubs/sap/m/Button.js" },
 			{ name: 'we"ird/na-me$1', stub: '/t/stubs/we"ird.js' },
-		], { runtimeFile: "/d/runtime/ui5-next-runtime.js", preload: { "sap/m/manifest.json": "{}" } });
+		], { runtimeFile: "/d/runtime/esm-ui5-runtime.js", preload: { "sap/m/manifest.json": "{}" } });
 		assert.equal(src, [
-			'import { preload } from "/d/runtime/ui5-next-runtime.js";',
+			'import { preload } from "/d/runtime/esm-ui5-runtime.js";',
 			'preload({"sap/m/manifest.json":"{}"});',
 			"",
 			"export default {",
@@ -46,7 +46,7 @@ describe("lazy registry and stubs", () => {
 			"sap/ui/test/Opa.js": "@openui5/pkg.b", "sap/b/UsesClassic.js": "@openui5/pkg.b", "sap-ui-core.js": "@openui5/pkg.a",
 		};
 		const files = {
-			"sap/a/A.js": 'import B from "./B.js"; import "../../../runtime/ui5-next-runtime.js"; export default B;',
+			"sap/a/A.js": 'import B from "./B.js"; import "../../../runtime/esm-ui5-runtime.js"; export default B;',
 			"sap/a/B.js": "export default 1;",
 			"sap/a/lib.orig.js": "(function(){}).call(globalThis);",
 			"sap/a/lib.js": 'import "./lib.orig.js"; export default globalThis.lib;',
@@ -123,7 +123,7 @@ describe("chunks: dependencies, hot/cold, names", () => {
 	});
 	test("chunkKind", () => {
 		const pk = ["sap.m"];
-		assert.equal(chunkKind({ name: "ui5-next-bootstrap", isEntry: true, fileName: "ui5-next-bootstrap.js" }, pk), "bootstrap");
+		assert.equal(chunkKind({ name: "esm-ui5-bootstrap", isEntry: true, fileName: "esm-ui5-bootstrap.js" }, pk), "bootstrap");
 		assert.equal(chunkKind({ name: "sap/m/Button", isEntry: true, fileName: "sap/m/Button.js" }, pk), "facade");
 		assert.equal(chunkKind({ name: "sap.m", isEntry: false, fileName: "sap.m.js" }, pk), "package");
 		assert.equal(chunkKind({ name: "x", isEntry: false, fileName: "sap.m_sap.ui.fl.js" }, pk), "extra");
@@ -156,7 +156,7 @@ describe("bundle report helpers", () => {
 	});
 	test("bundleImports: static and dynamic, only between output files", () => {
 		const r = bundleImports({
-			"a.js": 'import { x } from "./b.js"; import "../runtime/ui5-next-runtime.js"; export default () => import("./c.js");',
+			"a.js": 'import { x } from "./b.js"; import "../runtime/esm-ui5-runtime.js"; export default () => import("./c.js");',
 			"b.js": "export const x = 1;",
 			"c.js": "export default 2;",
 		});
@@ -257,14 +257,14 @@ describe("esm bootstrap", () => {
 	test("esm tree: setup first, then the Core", () => {
 		for (const [mode, coreImport] of [["esm", 'import Core from "./sap/ui/core/Core.js";']]) {
 			const files = bootstrapFiles(mode);
-			assert.deepEqual(Object.keys(files), ["ui5-next-setup.js", "ui5-next-bootstrap.js"]);
-			const boot = files["ui5-next-bootstrap.js"];
-			assert.ok(boot.indexOf('import "./ui5-next-setup.js";') < boot.indexOf(coreImport), mode);
+			assert.deepEqual(Object.keys(files), ["esm-ui5-setup.js", "esm-ui5-bootstrap.js"]);
+			const boot = files["esm-ui5-bootstrap.js"];
+			assert.ok(boot.indexOf('import "./esm-ui5-setup.js";') < boot.indexOf(coreImport), mode);
 			assert.match(boot, /export const ready = Core\.ready\(\)\.then\(\(\) => Core\);/);
-			assert.match(files["ui5-next-setup.js"], new RegExp(`init\\(\\{ mode: "${mode}" \\}\\);`));
-			assert.match(files["ui5-next-setup.js"], /compatVersion: "edge"[\s\S]*\.\.\.globalThis\["sap-ui-config"\]/);
+			assert.match(files["esm-ui5-setup.js"], new RegExp(`init\\(\\{ mode: "${mode}" \\}\\);`));
+			assert.match(files["esm-ui5-setup.js"], /compatVersion: "edge"[\s\S]*\.\.\.globalThis\["sap-ui-config"\]/);
 			parse(boot, "module");
-			parse(files["ui5-next-setup.js"], "module");
+			parse(files["esm-ui5-setup.js"], "module");
 		}
 		assert.throws(() => bootstrapFiles("amd"), /unknown mode/);
 	});
@@ -272,19 +272,19 @@ describe("esm bootstrap", () => {
 
 describe("demo check and server", () => {
 	test("checkDom", () => {
-		const ok = '<div class="sapMTitle sapMTitleStyleAuto"><span id="x-inner">UI5 Next Todo</span></div><ul><li id="a" class="sapMLIB sapMCLI">';
+		const ok = '<div class="sapMTitle sapMTitleStyleAuto"><span id="x-inner">esmUi5 Todo</span></div><ul><li id="a" class="sapMLIB sapMCLI">';
 		assert.deepEqual(checkDom(ok), { title: true, listItems: 1, error: null, ok: true });
-		assert.equal(checkDom("<title>UI5 Next Todo</title>").ok, false);
-		const failed = checkDom('<pre id="ui5-next-error">UI5 Next demo failed: TypeError: x &lt;y&gt;</pre>');
+		assert.equal(checkDom("<title>esmUi5 Todo</title>").ok, false);
+		const failed = checkDom('<pre id="esm-ui5-error">esmUi5 demo failed: TypeError: x &lt;y&gt;</pre>');
 		assert.equal(failed.ok, false);
-		assert.equal(failed.error, "UI5 Next demo failed: TypeError: x <y>");
+		assert.equal(failed.error, "esmUi5 demo failed: TypeError: x <y>");
 	});
 	test("required browser check fails instead of silently skipping", async () => {
 		assert.equal(await runDemoCheck({ browser: null, required: true }), 1);
 		assert.equal(await runDemoCheck({ browser: null, required: false }), 0);
 	});
 	test("static server: MIME types, no-store, 404, no path traversal", async () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-serve-"));
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-serve-"));
 		fs.mkdirSync(path.join(tmp, "demo"));
 		fs.writeFileSync(path.join(tmp, "demo/index.html"), "<p>hi</p>");
 		fs.writeFileSync(path.join(tmp, "a.js"), "export {}");
@@ -311,7 +311,7 @@ describe("demo check and server", () => {
 
 describe("bundle step (integration)", () => {
 	test("dependency-cut chunks, facades, lazy execution, no cycles", async () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-bundle-"));
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-bundle-"));
 		const put = (rel, content) => {
 			fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
 			fs.writeFileSync(path.join(tmp, rel), content);
@@ -342,21 +342,21 @@ describe("bundle step (integration)", () => {
 		// chunks: main bundles per package, sap.a's module that needs sap.b in a side bundle, the cold core part apart
 		assert.deepEqual(report.chunks, { "sap.a": 4, "sap.a+sap.b": 1, "sap.b": 1, "sap.ui.core": 1, "sap.ui.core.lazy": 1 });
 		const top = fs.readdirSync(bundles).filter((f) => f.endsWith(".js")).sort();
-		assert.deepEqual(top.filter((f) => f !== "rolldown-runtime.js"), ["sap.a.js", "sap.a_sap.b.js", "sap.b.js", "sap.ui.core.js", "sap.ui.core.lazy.js", "ui5-next-bootstrap.js"]);
+		assert.deepEqual(top.filter((f) => f !== "rolldown-runtime.js"), ["esm-ui5-bootstrap.js", "sap.a.js", "sap.a_sap.b.js", "sap.b.js", "sap.ui.core.js", "sap.ui.core.lazy.js"]);
 		assert.ok(fs.existsSync(path.join(bundles, "sap/b/B.js")) && fs.existsSync(path.join(bundles, "sap/a/Side.js"))); // facades at esm paths
 		assert.deepEqual(report.circularImports, []);
 		assert.deepEqual(report.importsBetweenBundles["sap.a.js"].filter((f) => f !== "rolldown-runtime.js"), ["sap.ui.core.js"]); // not sap.b
 		assert.equal(report.minifier, "oxc");
 		// licenses: the module's copyright comment survives bundling + minifying; every bundle says it was modified
 		const sapA = fs.readFileSync(path.join(bundles, "sap.a.js"), "utf8");
-		assert.ok(sapA.startsWith("/*! Modified by ui5-next: OpenUI5 (c) SAP SE"), sapA.slice(0, 80));
+		assert.ok(sapA.startsWith("/*! Modified by esm-ui5: OpenUI5 (c) SAP SE"), sapA.slice(0, 80));
 		assert.match(sapA, /\(c\) Copyright Test Corp - Apache-2\.0/);
 		for (const s of report.files) assert.ok(s.raw > 0 && s.minified > 0 && s.gzip > 0 && s.brotli > 0, s.file);
 
 		// run in Node: a facade runs exactly its module (and dependencies)
 		fs.writeFileSync(path.join(out, "package.json"), '{"type":"module"}');
 		const url = (rel) => pathToFileURL(path.join(bundles, rel)).href;
-		const { require: bundlesRequire, ready } = await import(url("ui5-next-bootstrap.js"));
+		const { require: bundlesRequire, ready } = await import(url("esm-ui5-bootstrap.js"));
 		await ready;
 		assert.equal(globalThis.__coreRuns, 1);
 		assert.deepEqual((await import(url("sap/b/B.js"))).default, { uses: "A", helper: "A!", glob: 7 });

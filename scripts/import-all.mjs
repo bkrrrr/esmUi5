@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dist = path.join(root, "dist", "esm");
-const EXCLUDE = /(^|\/)(test|qunit|thirdparty|testrecorder|demokit)\/|^sap\/ui\/documentation\/|\.orig\.js$|^ui5-next-|^ui5loader|^sap-ui-|\.support\.js$|^jquery\.sap\./;
-const report = JSON.parse(fs.readFileSync(path.join(root, "dist", "reports", "ui5-next-report.json"), "utf8"));
+const EXCLUDE = /(^|\/)(test|qunit|thirdparty|testrecorder|demokit)\/|^sap\/ui\/documentation\/|\.orig\.js$|^esm-ui5-|^ui5loader|^sap-ui-|\.support\.js$|^jquery\.sap\./;
+const report = JSON.parse(fs.readFileSync(path.join(root, "dist", "reports", "esm-ui5-report.json"), "utf8"));
 const classic = new Set(report.classicScripts ?? []); // not modules: loaded by their libraries as scripts
 const list = [];
 (function walk(dir, rel) {

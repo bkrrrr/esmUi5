@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}/`;
 
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-chrome-"));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-chrome-"));
 const chrome = spawn(CHROME, [
 	"--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
 	"--no-first-run", "--no-default-browser-check", "--window-size=1000,700", "about:blank",
@@ -123,7 +123,7 @@ await s("Page.navigate", { url: base + page });
 const evaluate = async (expression) => (await s("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })).result.value;
 let ready = false;
 while (Date.now() - started < 30000) {
-	ready = await evaluate(`document.body?.dataset.ui5Next === "ready"`);
+	ready = await evaluate(`document.body?.dataset.esmUi5 === "ready"`);
 	if (ready) break;
 	await new Promise((r) => setTimeout(r, 250));
 }
