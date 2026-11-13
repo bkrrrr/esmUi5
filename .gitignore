@@ -1,6 +1,7 @@
 node_modules
 dist
-demo/*.png
-demo/import-all.json
-demo/import-all-result.json
+dist.old-*
 .DS_Store
+test/browser/*.png
+test/browser/import-all*.json
+.cache

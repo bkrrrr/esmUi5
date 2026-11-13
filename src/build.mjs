@@ -1,19 +1,27 @@
-// Merge all @<scope>/* UI5 packages into one tree, convert AMD to ESM, write, report.
+// The "esm" step: merge all @<scope>/* UI5 packages into one tree, convert AMD to ESM, wrap
+// thirdparty scripts, build themes, and write dist/esm, dist/runtime and the reports.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { convert, isPlainModule, parse, RUNTIME_DEP } from "./convert.mjs";
-import { analyseAutoconfig, classicWrapper, addRegistration, libraryManifest, shimConfigOf } from "./legacy.mjs";
-import { loadLess, compileTheme, themeFooter, findThemes } from "./themes.mjs";
+import { analyseAutoconfig, thirdpartyWrapper, origEnvelope, addRegistration, libraryManifest, shimConfigOf } from "./legacy.mjs";
+import { buildThemes, findThemes, DEFAULT_THEMES } from "./themes.mjs";
+import { writeBootstrap } from "./bootstrap.mjs";
+import { writeLicenses } from "./licenses.mjs";
 
-export const DEFAULT_THEMES = ["sap_horizon", "sap_horizon_dark", "sap_horizon_hcb", "sap_horizon_hcw"];
+export { DEFAULT_THEMES };
 
 const posix = path.posix;
-const RUNTIME_FILE = "ui5-next-runtime.js";
-const BOOTSTRAP_FILE = "ui5-next-bootstrap.js";
+/** dist/ layout */
+export const LAYOUT = { esm: "esm", bundles: "bundles", runtime: "runtime", demo: "demo", reports: "reports" };
+export const RUNTIME_FILE = "ui5-next-runtime.js";
+/** the runtime, seen from the root of dist/esm */
+export const RUNTIME_TARGET = `../${LAYOUT.runtime}/${RUNTIME_FILE}`;
+// replaces what ui5loader-autoconfig.js defined inline (not the app-facing bootstrap)
+const AUTOCONFIG_FILE = "ui5-next-autoconfig.js";
 const RUNTIME_SRC = fileURLToPath(new URL("./runtime.js", import.meta.url));
-const BOOT_FILE = "ui5-next-boot.js";
-const BOOT_SRC = fileURLToPath(new URL("./boot.js", import.meta.url));
+const THIRDPARTY_GLOBALS = fileURLToPath(new URL("./thirdparty-globals.json", import.meta.url));
 
 const NEVER_COPY = [/(^|\/)\.DS_Store$/, /-dbg\.js$/, /\.min\.js$/, /-preload\.js$/, /-preload\.json$/, /\.js\.map$/];
 const LEGACY = {
@@ -35,8 +43,12 @@ export function resolveSpecifier(file, dep, roots, aliases = {}, exists = () => 
 	if (Object.hasOwn(aliases, dep)) dep = aliases[dep];
 	const dir = posix.dirname(file);
 	let target;
-	if (dep === RUNTIME_DEP) target = RUNTIME_FILE;
-	else if (dep.startsWith("./") || dep.startsWith("../")) target = posix.normalize(posix.join(dir, dep));
+	if (dep === RUNTIME_DEP) {
+		// lives outside the esm tree (dist/runtime), shared by esm/ and bundles/
+		let specifier = posix.relative(dir, RUNTIME_TARGET);
+		if (!specifier.startsWith("../")) specifier = "./" + specifier;
+		return { specifier, target: RUNTIME_TARGET, external: false };
+	} else if (dep.startsWith("./") || dep.startsWith("../")) target = posix.normalize(posix.join(dir, dep));
 	else if (roots.has(dep.split("/")[0])) target = posix.normalize(dep);
 	else return ext;
 	if (target === ".." || target.startsWith("../") || target.startsWith("/")) return ext;
@@ -94,20 +106,60 @@ function reasonOf(err) {
 	return String(err?.message ?? err).replace(/\s*\(\d+:\d+\)/g, "");
 }
 
+/** Remove a directory safely (refuses cwd, --from, folders with node_modules). */
+export function removeDir(absOut, from = ".") {
+	if (!fs.existsSync(absOut)) return;
+	const cwd = process.cwd();
+	const absFrom = path.resolve(from);
+	const inside = (child, parent) => {
+		const r = path.relative(parent, child);
+		return r === "" || (!r.startsWith("..") && !path.isAbsolute(r));
+	};
+	if (absOut === cwd || inside(cwd, absOut)) throw new Error(`--clean refused: ${absOut} is (or contains) the current directory`);
+	if (inside(absFrom, absOut)) throw new Error(`--clean refused: ${absOut} is (or contains) the --from directory`);
+	if (fs.existsSync(path.join(absOut, "node_modules"))) throw new Error(`--clean refused: ${absOut} contains node_modules`);
+	// move it away first (atomic), so a slow or failing delete (e.g. macOS Spotlight
+	// indexing the tree: ENOTEMPTY) never leaves a half-deleted output behind
+	// into the OS temp dir if it is on the same volume (a leftover does not matter there)
+	let trash = path.join(os.tmpdir(), `ui5-next-old-${process.pid}-${Date.now()}`);
+	try {
+		fs.renameSync(absOut, trash);
+	} catch {
+		trash = `${absOut}.old-${process.pid}-${Date.now()}`;
+		fs.renameSync(absOut, trash);
+	}
+	try {
+		fs.rmSync(trash, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+	} catch (err) {
+		console.warn(`ui5-next: could not remove old output ${trash} (${err.code ?? err.message}); delete it manually`);
+	}
+}
+
+/**
+ * Empty an output folder the build owns: move it into the temp dir first (atomic), then delete;
+ * a failing delete (macOS Spotlight: ENOTEMPTY) only leaves a leftover in the temp dir.
+ */
+export function freshDir(dir) {
+	if (fs.existsSync(dir)) {
+		let trash = path.join(os.tmpdir(), `ui5-next-old-${process.pid}-${Date.now()}-${path.basename(dir)}`);
+		try {
+			fs.renameSync(dir, trash);
+		} catch {
+			trash = `${dir}.old-${process.pid}-${Date.now()}`;
+			fs.renameSync(dir, trash);
+		}
+		try {
+			fs.rmSync(trash, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+		} catch {
+			/* leftover in the temp dir */
+		}
+	}
+	fs.mkdirSync(dir, { recursive: true });
+}
+
 function prepareOut(out, from, { clean, force }) {
 	const absOut = path.resolve(out);
-	if (clean && fs.existsSync(absOut)) {
-		const cwd = process.cwd();
-		const absFrom = path.resolve(from);
-		const inside = (child, parent) => {
-			const r = path.relative(parent, child);
-			return r === "" || (!r.startsWith("..") && !path.isAbsolute(r));
-		};
-		if (absOut === cwd || inside(cwd, absOut)) throw new Error(`--clean refused: ${absOut} is (or contains) the current directory`);
-		if (inside(absFrom, absOut)) throw new Error(`--clean refused: ${absOut} is (or contains) the --from directory`);
-		if (fs.existsSync(path.join(absOut, "node_modules"))) throw new Error(`--clean refused: ${absOut} contains node_modules`);
-		fs.rmSync(absOut, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-	}
+	if (clean) removeDir(absOut, from);
 	if (fs.existsSync(absOut) && fs.readdirSync(absOut).length && !force) {
 		throw new Error(`output directory ${absOut} is not empty (use --force to overwrite or --clean to remove it)`);
 	}
@@ -115,15 +167,30 @@ function prepareOut(out, from, { clean, force }) {
 	return absOut;
 }
 
+/** Write a JSON file, creating its folder. */
+export function writeJson(file, data) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+}
+
+/** Package manifest: esm-relative path -> npm package name, sorted by path. */
+export function packageManifest(entries) {
+	return Object.fromEntries([...entries].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+}
+
 /**
- * Run the build.
+ * The esm step.
  * @param {{from?: string, out?: string, scopes?: string[], clean?: boolean, force?: boolean,
- *          themes?: string[] | "all", version?: string, log?: (msg: string) => void}} opts
+ *          themes?: string[] | "all", thirdpartyGlobals?: object, version?: string,
+ *          log?: (msg: string) => void}} opts   out = the dist root; writes out/esm, out/runtime, out/reports
  */
 export async function build(opts = {}) {
 	const { from = ".", out = "dist", scopes = ["openui5", "sapui5"], clean = false, force = false } = opts;
 	const themes = opts.themes ?? DEFAULT_THEMES; // array of theme names, or "all"
 	const log = opts.log ?? ((m) => console.log(m));
+	const thirdpartyGlobals = opts.thirdpartyGlobals ?? JSON.parse(fs.readFileSync(THIRDPARTY_GLOBALS, "utf8"));
+	const distRoot = path.resolve(out);
+	const reportsDir = path.join(distRoot, LAYOUT.reports);
 
 	// 1. discovery
 	const { packages, ignoredPackages } = discoverPackages(from, scopes);
@@ -164,21 +231,21 @@ export async function build(opts = {}) {
 		for (const [name, text] of info.modules) {
 			const rel = name + ".js";
 			if (tree.has(rel)) continue;
-			tree.set(rel, { abs: null, text, pkg: "ui5loader-autoconfig.js" });
+			tree.set(rel, { abs: null, text, pkg: autoconfig.pkg, generated: true });
 			extracted.push(rel);
 		}
 	}
 	// the runtime shim replaces the legacy loader; ui5-next-bootstrap.js replaces what
-	// ui5loader-autoconfig.js provided (the inline configuration modules)
+	// ui5loader-autoconfig.js provided (the inline configuration modules): ui5-next-autoconfig.js
 	aliases["ui5loader"] = RUNTIME_DEP;
 	if (extracted.length) {
 		const deps = extracted.map((r) => r.slice(0, -3));
-		tree.set(BOOTSTRAP_FILE, {
-			abs: null, pkg: "ui5-next",
+		tree.set(AUTOCONFIG_FILE, {
+			abs: null, pkg: autoconfig.pkg, generated: true,
 			text: `/* generated by ui5-next: replaces ui5loader-autoconfig.js */\nsap.ui.define(${JSON.stringify(deps)}, function() {});\n`,
 		});
-		extracted.push(BOOTSTRAP_FILE);
-		aliases["ui5loader-autoconfig"] = BOOTSTRAP_FILE.slice(0, -3);
+		extracted.push(AUTOCONFIG_FILE);
+		aliases["ui5loader-autoconfig"] = AUTOCONFIG_FILE.slice(0, -3);
 	} else {
 		aliases["ui5loader-autoconfig"] = RUNTIME_DEP;
 	}
@@ -191,7 +258,10 @@ export async function build(opts = {}) {
 		else if (rel.endsWith(".js")) roots.add(rel.slice(0, -3));
 	}
 
-	const absOut = prepareOut(out, from, { clean, force });
+	const absOut = prepareOut(path.join(distRoot, LAYOUT.esm), from, { clean, force });
+	// package manifest: every file written to esm/ -> its npm package (first package wins)
+	const manifest = new Map();
+	const pkgOf = (rel) => tree.get(rel)?.pkg;
 
 	// 3.-6. convert / copy
 	const stats = {
@@ -206,7 +276,8 @@ export async function build(opts = {}) {
 	const externalSpecifiers = {};
 	const legacyReferences = Object.fromEntries(Object.keys(LEGACY).map((k) => [k, { occurrences: 0, files: 0 }]));
 
-	const write = (rel, data) => {
+	const write = (rel, data, pkg = pkgOf(rel)) => {
+		if (pkg) manifest.set(rel, pkg);
 		const dest = path.join(absOut, ...rel.split("/"));
 		fs.mkdirSync(path.dirname(dest), { recursive: true });
 		fs.writeFileSync(dest, data);
@@ -229,7 +300,7 @@ export async function build(opts = {}) {
 			else if (!firstImportedBy.has(r.target)) firstImportedBy.set(r.target, rel);
 		}
 	};
-	const classic = new Map(); // thirdparty classic scripts: rel -> source
+	const classic = new Map(); // classic (non-module, non-AMD) scripts: rel -> source
 
 	let done = 0;
 	for (const [rel, entry] of tree) {
@@ -291,18 +362,20 @@ export async function build(opts = {}) {
 		stats.converted++;
 	}
 
-	// classic scripts: wrap those that modules import or a loader shim config
-	// knows (plus their shim dependencies); copy the rest raw
-	const shimDeps = (rel) => [].concat(shim[rel.slice(0, -3)]?.deps ?? []).filter((d) => typeof d === "string");
-	const wrap = new Set();
-	const want = (rel) => {
-		if (!classic.has(rel) || wrap.has(rel)) return;
-		wrap.add(rel);
-		for (const d of shimDeps(rel)) want(d + ".js");
+	// classic scripts: wrap those listed in thirdparty-globals.json as
+	//   <name>.js = import "./<name>.orig.js"; export default globalThis[<global>]
+	// copy the others as is; report imported-but-unlisted ones (they cannot work as modules)
+	// thirdparty-globals.json values: "<global>" | null | { "global": "<global>"|null, "deps": [...] }
+	const listed = (rel) => {
+		const v = thirdpartyGlobals[rel.slice(0, -3)];
+		return v && typeof v === "object" ? { global: v.global ?? null, deps: v.deps ?? [] } : { global: v ?? null, deps: [] };
 	};
-	for (const rel of classic.keys()) {
-		if (firstImportedBy.has(rel) || shim[rel.slice(0, -3)]) want(rel);
-	}
+	const shimDeps = (rel) => [...new Set([...[].concat(shim[rel.slice(0, -3)]?.deps ?? []), ...(isListed(rel) ? listed(rel).deps : [])])]
+		.filter((d) => typeof d === "string");
+	const isListed = (rel) => Object.hasOwn(thirdpartyGlobals, rel.slice(0, -3));
+	const wrap = new Set([...classic.keys()].filter(isListed));
+	const unwrapped = new Map(); // rel -> first importer
+	const missingGlobals = Object.keys(thirdpartyGlobals).filter((n) => !classic.has(n + ".js") && !n.startsWith("//"));
 	const classicScripts = [];
 	for (const [rel, src] of classic) {
 		if (!wrap.has(rel)) {
@@ -311,36 +384,42 @@ export async function build(opts = {}) {
 			stats.classicScripts++;
 			continue;
 		}
-		const cfg = shim[rel.slice(0, -3)] ?? {};
-		const classicFile = posix.basename(rel).replace(/\.js$/, ".classic.js");
+		const { global } = listed(rel);
+		const origFile = posix.basename(rel).replace(/\.js$/, ".orig.js");
 		const fileImports = [];
-		const code = classicWrapper({
-			classicFile,
-			deps: shimDeps(rel),
-			exports: typeof cfg.exports === "string" ? cfg.exports : undefined,
-			runtimeSpec: runtimeSpecFor(rel),
-			depSpecs: (d) => {
-				const r = resolveSpecifier(rel, d, roots, aliases);
-				fileImports.push(r);
-				return r.specifier;
-			},
+		const depSpecs = shimDeps(rel).map((d) => {
+			const r = resolveSpecifier(rel, d, roots, aliases);
+			fileImports.push(r);
+			if (!wrap.has(d + ".js") && classic.has(d + ".js") && !unwrapped.has(d + ".js")) unwrapped.set(d + ".js", rel);
+			return r.specifier;
 		});
 		recordImports(rel, fileImports);
-		write(posix.join(posix.dirname(rel), classicFile), src);
-		write(rel, code);
+		write(posix.join(posix.dirname(rel), origFile), origEnvelope(src, global), pkgOf(rel));
+		write(rel, thirdpartyWrapper({ origFile, global, depSpecs }));
 		stats.wrapped++;
 	}
+	for (const rel of classic.keys()) {
+		if (!wrap.has(rel) && firstImportedBy.has(rel) && !unwrapped.has(rel)) unwrapped.set(rel, firstImportedBy.get(rel));
+	}
+	const unwrappedThirdparty = [...unwrapped]
+		.map(([rel, by]) => ({ module: rel.slice(0, -3), firstImportedBy: by, suggestedGlobal: shim[rel.slice(0, -3)]?.exports ?? null }))
+		.sort((a, b) => (a.module < b.module ? -1 : 1));
+	stats.unwrappedThirdparty = unwrappedThirdparty.length;
 
 	// 7. package.json, runtime, report
-	fs.writeFileSync(path.join(absOut, "package.json"), JSON.stringify({ name: "ui5-next", version, type: "module" }, null, 2) + "\n");
-	write(RUNTIME_FILE, fs.readFileSync(RUNTIME_SRC));
-	write(BOOT_FILE, fs.readFileSync(BOOT_SRC));
+	const corePkg = tree.get("sap/ui/core/library.js")?.pkg ?? packages[0].name;
+	fs.writeFileSync(path.join(absOut, "package.json"), JSON.stringify({ name: "ui5-next-esm", version, type: "module" }, null, 2) + "\n");
+	writeBootstrap(absOut, "esm"); // esm/ui5-next-bootstrap.js + esm/ui5-next-setup.js
+	// Apache-2.0 §4: LICENSE, NOTICE and the OpenUI5 license files (incl. third-party licenses)
+	const licenseFilesWritten = writeLicenses(distRoot, packages);
+	fs.mkdirSync(path.join(distRoot, LAYOUT.runtime), { recursive: true });
+	fs.copyFileSync(RUNTIME_SRC, path.join(distRoot, LAYOUT.runtime, RUNTIME_FILE));
 	// normally generated by the UI5 tooling; Lib/VersionInfo load it at runtime
 	if (!tree.has("sap-ui-version.json")) {
-		fs.writeFileSync(path.join(absOut, "sap-ui-version.json"), JSON.stringify({
+		write("sap-ui-version.json", JSON.stringify({
 			name: "ui5-next", version, buildTimestamp: new Date().toISOString().replace(/\D/g, "").slice(0, 12),
 			libraries: packages.filter((p) => !/themelib_/.test(p.name)).map((p) => ({ name: p.name.split("/").pop(), version: p.version })),
-		}, null, 2) + "\n");
+		}, null, 2) + "\n", corePkg);
 	}
 
 	// library manifest.json from .library (normally generated by the UI5 tooling)
@@ -350,38 +429,21 @@ export async function build(opts = {}) {
 		const dir = posix.dirname(rel);
 		if (tree.has(`${dir}/manifest.json`)) continue;
 		const files = [...tree.keys()].filter((k) => posix.dirname(k) === dir).map((k) => posix.basename(k));
-		write(`${dir}/manifest.json`, JSON.stringify(libraryManifest(readText(tree.get(rel)), files), null, 2) + "\n");
+		write(`${dir}/manifest.json`, JSON.stringify(libraryManifest(readText(tree.get(rel)), files), null, 2) + "\n", pkgOf(rel));
 		manifests++;
 	}
 	stats.libraryManifests = manifests;
 
-	// themes: library.source.less -> library.css + library-parameters.json
-	const themeReport = { compiled: [], errors: [] };
-	const lessEntry = tree.get("sap/ui/thirdparty/less.js");
+	// themes (less-openui5): library.source.less -> library.css & co., next to the sources
 	const wanted = findThemes(tree.keys()).filter((t) => themes === "all" || themes.includes(t.theme));
-	if (wanted.length && lessEntry) {
-		const less = loadLess(readText(lessEntry));
-		let n = 0;
-		for (const t of wanted) {
-			if (++n % 20 === 0) log(`  themes ${n}/${wanted.length}`);
-			if (tree.has(`${t.dir}/library.css`)) continue; // prebuilt
-			try {
-				const { css, parameters } = await compileTheme(less, path.join(absOut, ...t.dir.split("/"), "library.source.less"));
-				write(`${t.dir}/library.css`, css + themeFooter(t.lib, t.theme, version, parameters));
-				write(`${t.dir}/library-parameters.json`, JSON.stringify(parameters) + "\n");
-				themeReport.compiled.push(`${t.lib}:${t.theme}`);
-			} catch (err) {
-				themeReport.errors.push({ library: t.lib, theme: t.theme, reason: reasonOf(err) });
-			}
-		}
-	}
-	stats.themesCompiled = themeReport.compiled.length;
-	stats.themeErrors = themeReport.errors.length;
+	const themeResult = wanted.length ? await buildThemes(absOut, wanted, log) : { compiled: [], themeFailures: [], written: [] };
+	for (const rel of themeResult.written) manifest.set(rel, pkgOf(`${posix.dirname(rel)}/library.source.less`));
+	stats.themesCompiled = themeResult.compiled.length;
+	stats.themeFailures = themeResult.themeFailures.length;
 
 	const present = new Set(tree.keys());
-	for (const rel of wrap) present.add(rel.replace(/\.js$/, ".classic.js"));
-	present.add(RUNTIME_FILE);
-	present.add(BOOT_FILE);
+	for (const rel of wrap) present.add(rel.replace(/\.js$/, ".orig.js"));
+	present.add(RUNTIME_TARGET);
 	const unresolvedImports = [...firstImportedBy]
 		.filter(([target]) => !present.has(target))
 		.map(([target, by]) => ({ target, firstImportedBy: by }))
@@ -399,18 +461,23 @@ export async function build(opts = {}) {
 		skipped,
 		warnings,
 		obsoleteBootstrap,
+		licenseFiles: licenseFilesWritten,
 		extracted,
-		wrappedClassicScripts: [...wrap].sort(),
+		wrappedThirdparty: [...wrap].sort(),
+		unwrappedThirdparty,
+		thirdpartyGlobalsWithoutScript: missingGlobals,
 		classicScripts: classicScripts.sort(),
-		themes: themeReport,
+		themes: { theme: themes, compiled: themeResult.compiled },
+		themeFailures: themeResult.themeFailures,
 		unresolvedImports,
 		externalSpecifiers: Object.fromEntries(Object.entries(externalSpecifiers).sort((a, b) => b[1] - a[1])),
 		legacyReferences,
 	};
-	fs.writeFileSync(path.join(absOut, "ui5-next-report.json"), JSON.stringify(report, null, 2) + "\n");
+	writeJson(path.join(reportsDir, "ui5-next-report.json"), report);
+	writeJson(path.join(reportsDir, "ui5-next-packages.json"), packageManifest(manifest));
 
 	// 8. summary
-	log(summary(report, absOut));
+	log(summary(report, absOut, reportsDir));
 	return report;
 }
 
@@ -420,7 +487,7 @@ export function topSkipReasons(report, n = 10) {
 	return [...counts].sort((a, b) => b[1] - a[1]).slice(0, n);
 }
 
-function summary(report, absOut) {
+function summary(report, absOut, reportsDir) {
 	const s = report.stats;
 	const lines = [
 		``,
@@ -431,8 +498,9 @@ function summary(report, absOut) {
 		`  unchanged:    ${s.unchanged} ES modules`,
 		`  classic:      ${s.classicScripts} classic scripts copied as is (not modules, no loader call)`,
 		`  copied raw:   ${s.copied} (${report.obsoleteBootstrap.length} obsolete bootstrap/loader files)`,
-		`  wrapped:      ${s.wrapped} classic scripts as ES modules; ${s.extracted} modules extracted from the bootstrap`,
-		`  themes:       ${s.themesCompiled} library themes compiled, ${s.themeErrors} errors`,
+		`  thirdparty:   ${s.wrapped} wrapped (thirdparty-globals.json), ${s.unwrappedThirdparty} imported but not listed`,
+		`  extracted:    ${s.extracted} modules from the legacy bootstrap`,
+		`  themes:       ${s.themesCompiled} library themes built (less-openui5), ${s.themeFailures} failures`,
 		`  skipped:      ${s.skipped}`,
 		`  warnings:     ${s.warnings} in ${s.filesWithWarnings} files`,
 		`  unresolved:   ${s.unresolvedImports} import targets`,
@@ -444,6 +512,36 @@ function summary(report, absOut) {
 		lines.push(`  top skip reasons:`);
 		for (const [r, n] of top) lines.push(`    ${String(n).padStart(5)}  ${r}`);
 	}
-	lines.push(`  report:       ${path.join(absOut, "ui5-next-report.json")}`);
+	lines.push(`  reports:      ${reportsDir}`);
 	return lines.join("\n");
+}
+
+/**
+ * The "themes" step on its own: (re)build themes inside an existing dist/esm and update the
+ * reports (themes, themeFailures, package manifest).
+ */
+export async function themesStep({ out = "dist", themes = DEFAULT_THEMES, log = (m) => console.log(m) } = {}) {
+	const distRoot = path.resolve(out);
+	const esmRoot = path.join(distRoot, LAYOUT.esm);
+	if (!fs.existsSync(esmRoot)) throw new Error(`no ${esmRoot}; run the esm step first`);
+	const rels = [...walkFiles(esmRoot)].map(([rel]) => rel);
+	const wanted = findThemes(rels).filter((t) => themes === "all" || themes.includes(t.theme));
+	const result = await buildThemes(esmRoot, wanted, log);
+	const reportFile = path.join(distRoot, LAYOUT.reports, "ui5-next-report.json");
+	const manifestFile = path.join(distRoot, LAYOUT.reports, "ui5-next-packages.json");
+	if (fs.existsSync(reportFile)) {
+		const report = JSON.parse(fs.readFileSync(reportFile, "utf8"));
+		report.themes = { theme: themes, compiled: result.compiled };
+		report.themeFailures = result.themeFailures;
+		report.stats.themesCompiled = result.compiled.length;
+		report.stats.themeFailures = result.themeFailures.length;
+		writeJson(reportFile, report);
+	}
+	if (fs.existsSync(manifestFile)) {
+		const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+		for (const rel of result.written) manifest[rel] = manifest[`${path.posix.dirname(rel)}/library.source.less`];
+		writeJson(manifestFile, packageManifest(Object.entries(manifest)));
+	}
+	log(`themes: ${result.compiled.length} built, ${result.themeFailures.length} failures`);
+	return result;
 }

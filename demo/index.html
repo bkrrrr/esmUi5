@@ -2,33 +2,18 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>UI5 Next demo</title>
-	<script type="module">
-		import { boot } from "../dist/ui5-next-boot.js";
-
-		await boot({ theme: "sap_horizon" });
-		await import("./app.js"); // app code, loaded after the Core is ready
-
-		window.__smoke = async () => {
-			const btn = document.querySelector("#content .sapMBtn");
-			const r = btn.getBoundingClientRect();
-			const o = { bubbles: true, cancelable: true, clientX: r.x + 5, clientY: r.y + 5, button: 0 };
-			for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-				btn.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, o) : new MouseEvent(type, o));
-			}
-			await new Promise((r) => setTimeout(r, 300));
-			return {
-				text: btn.textContent,
-				background: getComputedStyle(btn.querySelector(".sapMBtnInner")).backgroundColor,
-				font: getComputedStyle(btn.querySelector(".sapMBtnContent")).fontFamily,
-				toast: document.querySelector(".sapMMessageToast")?.textContent,
-				ok: !!document.querySelector(".sapMMessageToast"),
-			};
-		};
-		document.body.dataset.ui5Next = "ready";
-	</script>
+	<title>UI5 Next demos</title>
+	<style>body { font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 3rem auto; padding: 0 1rem; } code { background: #f2f2f2; padding: 0 .2em; }</style>
 </head>
-<body class="sapUiBody">
-	<div id="content"></div>
+<body>
+	<h1>UI5 Next demos</h1>
+	<p>The same Todo app (Component, manifest.json, i18n, XML view, controller), twice. Both import UI5 with
+	plain <code>import</code> statements, no loader, no import map, no bundler at runtime.</p>
+	<ul>
+		<li><a href="esm/index.html">esm/</a>: one ES module per UI5 module,
+			<code>import Controller from "../../../esm/sap/ui/core/mvc/Controller.js"</code></li>
+		<li><a href="bundles/index.html">bundles/</a>: one file per npm package,
+			<code>import { "sap/ui/core/mvc/Controller" as Controller } from "../../../bundles/sap.ui.core.registry.js"</code></li>
+	</ul>
 </body>
 </html>

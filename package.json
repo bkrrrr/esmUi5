@@ -3,22 +3,34 @@
   "version": "0.1.0",
   "description": "Builds OpenUI5 into one tree of native ES modules (UI5 Next)",
   "type": "module",
-  "bin": {
-    "ui5-next": "bin/ui5-next.mjs"
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./dist/runtime/ui5-next-runtime.js",
+    "./*": "./dist/*",
+    "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "scripts": {
-    "build": "node bin/ui5-next.mjs --from . --out dist --force",
+    "prepack": "npm run build",
+    "build": "node bin/ui5-next.mjs all --clean",
+    "build:esm": "node bin/ui5-next.mjs esm --clean",
+    "build:bundles": "node bin/ui5-next.mjs bundle",
+    "build:demo": "node bin/ui5-next.mjs demo",
+    "bundle:compare": "node scripts/bundle-compare.mjs",
+    "demo:check": "node scripts/demo-check.mjs",
+    "serve": "node bin/ui5-next.mjs serve --out dist/demo",
     "test": "node --test test/*.test.mjs",
-    "check": "node scripts/check-dist.mjs dist",
-    "smoke": "node scripts/smoke.mjs demo/index.html && node scripts/smoke.mjs demo/xmlview.html",
+    "check": "node scripts/check-dist.mjs dist/esm",
+    "smoke": "node scripts/smoke.mjs test/browser/button.html && node scripts/smoke.mjs test/browser/xmlview.html",
     "import-all": "node scripts/import-all.mjs",
-    "serve": "node scripts/serve.mjs . 8080"
+    "benchmark": "node scripts/benchmark.mjs"
   },
-  "dependencies": {
-    "acorn": "^8.14.0",
+  "devDependencies": {
     "@openui5/sap.f": "1.154.0",
     "@openui5/sap.html": "1.154.0",
     "@openui5/sap.m": "1.154.0",
@@ -44,7 +56,11 @@
     "@openui5/themelib_sap_bluecrystal": "1.154.0",
     "@openui5/themelib_sap_fiori_3": "1.154.0",
     "@openui5/themelib_sap_horizon": "1.154.0",
-    "@openui5/ts-types": "1.154.0"
+    "@openui5/ts-types": "1.154.0",
+    "acorn": "^8.14.0",
+    "less-openui5": "0.12.0",
+    "oxc-minify": "0.158.0",
+    "rolldown": "1.3.2"
   },
   "license": "Apache-2.0"
 }

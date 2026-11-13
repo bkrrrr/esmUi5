@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Browser smoke test: serves the project, opens demo/index.html in headless Chrome via the
+// Browser smoke test: serves the project, opens a test page (default test/browser/button.html) in headless Chrome via the
 // DevTools protocol (no extra dependencies, Node >= 22 for the global WebSocket), and checks
 // the page's window.__smoke() checks. Writes a screenshot next to the page (<page>.png).
 // Usage: node scripts/smoke.mjs [page] ; CHROME=/path/to/chrome to override the browser.
@@ -11,7 +11,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const page = process.argv[2] ?? "demo/index.html";
+const page = process.argv[2] ?? "test/browser/button.html";
 const CHROME = process.env.CHROME ?? [
 	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 	"/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser",
@@ -129,7 +129,9 @@ while (Date.now() - started < 30000) {
 }
 const elapsed = Date.now() - started;
 // the page may define window.__smoke() returning check results ({ ok, ... })
-const info = ready ? await evaluate(`window.__smoke ? window.__smoke().catch((e) => ({ ok: false, error: String(e) })) : { ok: true }`) : null;
+// the page may define window.__smoke(); a second CLI argument is an async expression run instead
+const expr = process.argv[3] ? `(async () => { ${process.argv[3]} })()` : "window.__smoke ? window.__smoke() : { ok: true }";
+const info = ready ? await evaluate(`Promise.resolve(${expr}).catch((e) => ({ ok: false, error: String(e && e.stack || e) }))`) : null;
 await new Promise((r) => setTimeout(r, 500)); // let the theme settle for the screenshot
 info && (info.globals = await evaluate(`({ jQuery: typeof window.jQuery, sapUiLoader: typeof window.sap?.ui?.loader })`));
 const shot = await s("Page.captureScreenshot", { format: "png" });

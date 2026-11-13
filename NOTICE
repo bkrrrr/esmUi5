@@ -1,0 +1,18 @@
+ui5-next
+Copyright 2026 the ui5-next contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The build output of this product (dist/, also published to npm) contains OpenUI5
+(https://github.com/UI5/openui5), Copyright SAP SE or an SAP affiliate company and
+OpenUI5 contributors, licensed under the Apache License, Version 2.0. The OpenUI5
+sources were modified: converted from AMD (sap.ui.define) to ES modules, wrapped
+(third-party scripts), bundled and minified, and theme CSS was generated from the LESS
+sources. Modified files carry a notice saying so.
+
+OpenUI5 includes third-party components under separate licenses (MIT, BSD-3-Clause,
+EPL-1.0, ISC, Unicode-3.0 and others). They are listed in dist/licenses/THIRDPARTY.txt;
+the license texts are in dist/licenses/LICENSES/.
+
+UI5, OpenUI5 and SAP are trademarks or registered trademarks of SAP SE. This project is
+not affiliated with, endorsed or supported by SAP SE.

@@ -243,27 +243,53 @@ function convertFlat(code, deps, factory, spec, hoistedImports) {
 	if (!factory.params.every((p) => p.type === "Identifier")) throw new Error("factory has non-identifier parameters");
 	if (factory.params.length > deps.length) throw new Error("factory has more parameters than dependencies");
 
+	// parameters the factory assigns to cannot be import bindings (those are read-only):
+	// import them under a private name and declare `let <param> = <import>;`
+	const reassigned = reassignedNames(factory.body, new Set(factory.params.map((p) => p.name)));
 	const imports = [];
+	const lets = [];
 	deps.forEach((dep, k) => {
 		const param = factory.params[k]?.name;
 		if (dep === "exports" || dep === "module") throw new Error(`CommonJS dependency "${dep}"`);
+		const local = param && reassigned.has(param) ? `__ui5_p_${param}` : param;
+		if (local !== param) lets.push(`let ${param} = ${local};`);
 		if (dep === "require") {
 			// module-local require -> the runtime shim (root-relative names only)
-			const what = param === "require" ? "require" : `require as ${param}`;
+			const what = local === "require" ? "require" : `require as ${local}`;
 			if (param) imports.push(`import { ${what} } from ${JSON.stringify(spec(RUNTIME_DEP))};`);
 			return;
 		}
 		const s = JSON.stringify(spec(dep));
-		imports.push(param ? `import ${param} from ${s};` : `import ${s};`);
+		imports.push(param ? `import ${local} from ${s};` : `import ${s};`);
 	});
 	imports.push(...hoistedImports);
 
 	const body = factory.body.type !== "BlockStatement"
 		? `export default (${code.slice(factory.body.start, factory.body.end)});`
 		: convertFactoryBody(code, factory.body);
-	const out = (imports.length ? imports.join("\n") + "\n\n" : "") + body;
+	const head = imports.length ? imports.join("\n") + "\n\n" : "";
+	const out = head + (lets.length ? lets.join("\n") + "\n\n" : "") + body;
 	parse(out, "module"); // e.g. `var X` that redeclares an imported name
 	return out;
+}
+
+/** Names from `names` that are assigned anywhere in `node` (=, op=, ++/--, for-in/of targets). */
+function reassignedNames(node, names) {
+	const found = new Set();
+	const target = (t) => {
+		if (!t) return;
+		if (t.type === "Identifier" && names.has(t.name)) found.add(t.name);
+		else if (t.type === "ObjectPattern") t.properties.forEach((p) => target(p.type === "RestElement" ? p.argument : p.value));
+		else if (t.type === "ArrayPattern") t.elements.forEach(target);
+		else if (t.type === "AssignmentPattern") target(t.left);
+		else if (t.type === "RestElement") target(t.argument);
+	};
+	walk(node, (n) => {
+		if (n.type === "AssignmentExpression") target(n.left);
+		else if (n.type === "UpdateExpression") target(n.argument);
+		else if ((n.type === "ForInStatement" || n.type === "ForOfStatement") && n.left.type !== "VariableDeclaration") target(n.left);
+	});
+	return found;
 }
 
 /** Imports for a factory that is called as a function: one binding per dependency. */

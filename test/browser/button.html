@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>UI5 Next demo</title>
+	<script type="module">
+		import { ready } from "../../dist/esm/ui5-next-bootstrap.js";
+
+		await ready;
+		await import("./button-app.js"); // app code, loaded after the Core is ready
+
+		window.__smoke = async () => {
+			const btn = document.querySelector("#content .sapMBtn");
+			const r = btn.getBoundingClientRect();
+			const o = { bubbles: true, cancelable: true, clientX: r.x + 5, clientY: r.y + 5, button: 0 };
+			for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+				btn.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, o) : new MouseEvent(type, o));
+			}
+			await new Promise((r) => setTimeout(r, 300));
+			return {
+				text: btn.textContent,
+				background: getComputedStyle(btn.querySelector(".sapMBtnInner")).backgroundColor,
+				font: getComputedStyle(btn.querySelector(".sapMBtnContent")).fontFamily,
+				toast: document.querySelector(".sapMMessageToast")?.textContent,
+				ok: !!document.querySelector(".sapMMessageToast"),
+			};
+		};
+		document.body.dataset.ui5Next = "ready";
+	</script>
+</head>
+<body class="sapUiBody">
+	<div id="content"></div>
+</body>
+</html>

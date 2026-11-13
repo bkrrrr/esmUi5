@@ -1,0 +1,31 @@
+<mvc:View controllerName="demo.todo.controller.App" displayBlock="true" height="100%"
+	xmlns:mvc="sap.ui.core.mvc" xmlns="sap.m">
+	<App id="app">
+		<Page id="page" title="{i18n>title}">
+			<content>
+				<HBox class="sapUiSmallMargin" alignItems="Center">
+					<Input id="newTodo" value="{/newTodo}" placeholder="{i18n>newTodoPlaceholder}" submit=".onAdd" width="22rem"/>
+					<Button id="add" text="{i18n>add}" type="Emphasized" press=".onAdd" class="sapUiTinyMarginBegin"/>
+				</HBox>
+				<HBox class="sapUiSmallMarginBeginEnd" alignItems="Center" justifyContent="SpaceBetween">
+					<SegmentedButton id="filter" selectedKey="all" selectionChange=".onFilter" width="15rem">
+						<items>
+							<SegmentedButtonItem key="all" text="{i18n>all}"/>
+							<SegmentedButtonItem key="open" text="{i18n>open}"/>
+							<SegmentedButtonItem key="done" text="{i18n>done}"/>
+						</items>
+					</SegmentedButton>
+					<Text id="counter" text="{= ${/openCount} + ' ' + (${/openCount} === 1 ? ${i18n>itemLeft} : ${i18n>itemsLeft}) }"/>
+				</HBox>
+				<List id="todoList" items="{/todos}" mode="Delete" delete=".onDelete" noDataText="{i18n>noData}" class="sapUiSmallMarginTop">
+					<CustomListItem>
+						<HBox alignItems="Center" class="sapUiTinyMarginBegin">
+							<CheckBox selected="{done}" select=".onToggle"/>
+							<Text text="{title}"/>
+						</HBox>
+					</CustomListItem>
+				</List>
+			</content>
+		</Page>
+	</App>
+</mvc:View>

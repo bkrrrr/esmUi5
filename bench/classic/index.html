@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Classic UI5 Todo</title>
+	<!-- the classic bootstrap: ui5loader + Core; resources/ is either the CDN build or the npm sources -->
+	<script id="sap-ui-bootstrap" src="resources/sap-ui-core.js"
+		data-sap-ui-theme="sap_horizon"
+		data-sap-ui-language="en"
+		data-sap-ui-compat-version="edge"
+		data-sap-ui-async="true"
+		data-sap-ui-resource-roots='{ "demo.todo": "./" }'
+		data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"></script>
+	<style>html, body { height: 100%; margin: 0; }</style>
+</head>
+<body class="sapUiBody">
+	<div data-sap-ui-component data-name="demo.todo" data-id="container" data-height="100%" data-settings='{ "id": "todo" }' style="height: 100%"></div>
+</body>
+</html>

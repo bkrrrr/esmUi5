@@ -1,0 +1,18 @@
+{
+	"newTodo": "",
+	"openCount": 0,
+	"todos": [
+		{
+			"title": "Convert OpenUI5 to native ES modules",
+			"done": true
+		},
+		{
+			"title": "Bundle one file per npm package",
+			"done": true
+		},
+		{
+			"title": "Try this demo with esm/ and bundles/",
+			"done": false
+		}
+	]
+}

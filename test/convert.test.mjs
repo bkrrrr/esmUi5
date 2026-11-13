@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { convert, isPlainModule, parse } from "../src/convert.mjs";
-import { resolveSpecifier, build } from "../src/build.mjs";
-import { analyseAutoconfig, classicWrapper, addRegistration, libraryManifest, shimConfigOf } from "../src/legacy.mjs";
-import { loadLess, compileTheme, themeFooter, findThemes } from "../src/themes.mjs";
+import { resolveSpecifier, build, packageManifest, removeDir } from "../src/build.mjs";
+import { analyseAutoconfig, thirdpartyWrapper, origEnvelope, globalizeSloppyThis, addRegistration, libraryManifest, shimConfigOf } from "../src/legacy.mjs";
+import { findThemes, themeFiles, buildThemes } from "../src/themes.mjs";
 
 const FIX = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const read = (f) => fs.readFileSync(path.join(FIX, f), "utf8");
@@ -39,6 +39,8 @@ const CASES = {
 	"nested-define": ["line 8: sap.ui.define is not a top-level statement; its result is exported"],
 	// probe mode (used by the build): sync require stays a runtime call
 	"probe-require": ["sap.ui.requireSync still present"],
+	// a reassigned parameter cannot be an import binding (read-only)
+	"reassigned-param": [],
 };
 const optionsFor = (name) => (name.startsWith("probe-") ? { syncRequire: "probe" } : {});
 
@@ -153,13 +155,13 @@ describe("resolveSpecifier", () => {
 	test("loader plugin", () => {
 		assert.deepEqual(resolveSpecifier("sap/m/a.js", "sap/ui/text!./x.txt", roots), { specifier: "sap/ui/text!./x.txt", target: null, external: true });
 	});
-	test("runtime", () => {
-		assert.equal(resolveSpecifier("sap/m/a.js", "ui5-next-runtime", roots).specifier, "../../ui5-next-runtime.js");
+	test("runtime (outside the esm tree, in dist/runtime)", () => {
+		assert.deepEqual(resolveSpecifier("sap/m/a.js", "ui5-next-runtime", roots), {
+			specifier: "../../../runtime/ui5-next-runtime.js", target: "../runtime/ui5-next-runtime.js", external: false,
+		});
+		assert.equal(resolveSpecifier("x.js", "ui5-next-runtime", roots).specifier, "../runtime/ui5-next-runtime.js");
 	});
 });
-
-const LESS_JS = fileURLToPath(new URL("../node_modules/@openui5/sap.ui.core/src/sap/ui/thirdparty/less.js", import.meta.url));
-const haveLess = fs.existsSync(LESS_JS);
 
 describe("legacy helpers", () => {
 	const autoconfig = `(function() {
@@ -184,30 +186,44 @@ describe("legacy helpers", () => {
 		assert.match(cfg, /Configuration\.registerProvider\(__p0\)/);
 		assert.deepEqual(info.shim, { "x/old": { exports: "Old", deps: ["x/dep"] } });
 		assert.deepEqual(info.map, { jquery: "sap/ui/thirdparty/jquery" });
-		// the extracted sources convert to valid modules
 		for (const src of info.modules.values()) assert.ok(convert(src, spec));
 	});
 	test("shimConfigOf reads sap.ui.loader.config calls", () => {
 		assert.deepEqual(shimConfigOf('sap.ui.loader.config({ shim: { "a/b": { exports: "B" } } }); sap.ui.define([], function() {});'), { "a/b": { exports: "B" } });
 		assert.deepEqual(shimConfigOf("var x = 1;"), {});
 	});
-	test("classicWrapper", () => {
-		const code = classicWrapper({ classicFile: "lib.classic.js", deps: ["x/dep"], exports: "jQuery.mobile", runtimeSpec: "../rt.js", depSpecs: (d) => `./${d}.js` });
-		assert.equal(code, [
-			"/* UI5 Next: ES module wrapper; the original classic script is ./lib.classic.js */",
-			'import { _loadScript } from "../rt.js";',
-			'import "./x/dep.js";',
-			"",
-			'await _loadScript(new URL("./lib.classic.js", import.meta.url).href);',
-			"",
-			'export default globalThis["jQuery"]?.["mobile"];',
-			"",
-		].join("\n"));
+	test("thirdpartyWrapper", () => {
+		assert.equal(thirdpartyWrapper({ origFile: "jquery.orig.js", global: "jQuery" }),
+			'import "./jquery.orig.js";\nexport default globalThis["jQuery"];\n');
+		const code = thirdpartyWrapper({ origFile: "mobile.orig.js", global: "jQuery.mobile", depSpecs: ["./jquery.js"] });
+		assert.equal(code, 'import "./jquery.js";\nimport "./mobile.orig.js";\nexport default globalThis["jQuery"]?.["mobile"];\n');
+		assert.equal(thirdpartyWrapper({ origFile: "x.orig.js", global: null }), 'import "./x.orig.js";\nexport default undefined;\n');
 		parse(code, "module");
+	});
+	test("origEnvelope: global this, shadowed CommonJS/AMD names, published global", async () => {
+		const src = "(function (root, factory) {\n  if (typeof module === 'object') module.exports = factory();\n  else root.Lib = factory();\n}(this, function () { return { v: 1 }; }));\nvar helper = 2;";
+		const env = origEnvelope(src, "helper");
+		parse(env, "module");
+		assert.match(env, /\(function \(module, exports, define, require\) \{/);
+		assert.match(env, /\}\(globalThis, function/);
+		delete globalThis.Lib;
+		delete globalThis.helper;
+		await import("data:text/javascript," + encodeURIComponent(env));
+		assert.deepEqual(globalThis.Lib, { v: 1 });
+		assert.equal(globalThis.helper, 2);
+		delete globalThis.Lib;
+		delete globalThis.helper;
+	});
+	test("globalizeSloppyThis: only where sloppy this is the global object", () => {
+		assert.equal(
+			globalizeSloppyThis("var a=this;(function(r){var b=this;o={f:function(){return this}};(function(x){})(1,this);g.call(this)})(this);function F(){this.x=1}"),
+			"var a=globalThis;(function(r){var b=globalThis;o={f:function(){return this}};(function(x){})(1,globalThis);g.call(globalThis)})(globalThis);function F(){this.x=1}"
+		);
+		assert.equal(globalizeSloppyThis("f(function(){ (function(a,w){})(jQuery,this); o.m(this); })"), "f(function(){ (function(a,w){})(jQuery,globalThis); o.m(this); })");
 	});
 	test("addRegistration keeps the header comment first", () => {
 		const code = addRegistration("/*!\n * (c)\n */\nimport A from \"./A.js\";\n\nexport default A;\n", "sap/x/Y", "../../rt.js", "./Y.js");
-		assert.equal(code, '/*!\n * (c)\n */\nimport { _register as __ui5_register } from "../../rt.js";\nimport * as __ui5_self from "./Y.js";\nimport A from "./A.js";\n\nexport default A;\n\n__ui5_register("sap/x/Y", __ui5_self);\n');
+		assert.equal(code, '/*!\n * (c)\n */\n/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */\nimport { _register as __ui5_register } from "../../rt.js";\nimport * as __ui5_self from "./Y.js";\nimport A from "./A.js";\n\nexport default A;\n\n__ui5_register("sap/x/Y", __ui5_self);\n');
 	});
 	test("libraryManifest", () => {
 		const xml = "<library><name>sap.x</name><version>1.2.3</version><documentation>X lib</documentation><dependencies><dependency><libraryName>sap.ui.core</libraryName></dependency><dependency><libraryName>sap.m</libraryName><lazy>true</lazy></dependency></dependencies></library>";
@@ -218,35 +234,47 @@ describe("legacy helpers", () => {
 		assert.deepEqual(m["sap.ui5"].library.i18n, { bundleUrl: "messagebundle.properties", supportedLocales: ["", "de"] });
 		assert.equal(libraryManifest(xml, [])["sap.ui5"].library.i18n, false);
 	});
+	test("packageManifest sorts by path", () => {
+		assert.deepEqual(Object.keys(packageManifest([["b.js", "@x/p"], ["a/c.js", "@x/q"]])), ["a/c.js", "b.js"]);
+	});
 });
 
-describe("themes", () => {
+describe("themes (less-openui5)", () => {
 	test("findThemes", () => {
-		assert.deepEqual(findThemes(["sap/m/themes/sap_horizon/library.source.less", "sap/m/themes/base/Button.less"]), [
+		assert.deepEqual(findThemes(["sap/m/themes/sap_horizon/library.source.less", "sap/m/themes/base/Button.less", "sap/a/themes/base/library.source.less"]), [
+			{ lib: "sap.a", theme: "base", dir: "sap/a/themes/base" },
 			{ lib: "sap.m", theme: "sap_horizon", dir: "sap/m/themes/sap_horizon" },
 		]);
 	});
-	test("themeFooter: parameters (URI component encoded) and metadata (plain JSON)", () => {
-		const css = themeFooter("sap.m", "sap_horizon", "1.0.0", { a: "#fff" });
-		assert.ok(css.includes("#sap-ui-theme-sap\\.m{background-image:url('data:text/plain;utf-8,%7B%22a%22%3A%22%23fff%22%7D')}"));
-		assert.ok(css.includes('.sapThemeMetaData-UI5-sap-m{background-image:url(\'data:text/plain;utf-8,{"Path":"UI5.sap/m.sap_horizon"'));
+	test("themeFiles", () => {
+		const files = themeFiles({ css: "a", cssRtl: "b", variables: { x: "1" }, cssVariables: "c", cssVariablesSource: "d", cssSkeleton: "e", cssSkeletonRtl: "f" });
+		assert.deepEqual(Object.keys(files), ["library.css", "library-RTL.css", "library-parameters.json", "css_variables.css", "css_variables.source.less", "library_skeleton.css", "library_skeleton-RTL.css"]);
+		assert.equal(files["library-parameters.json"], '{"x":"1"}\n');
 	});
-	test("compileTheme with the bundled LESS", { skip: !haveLess && "bundled less.js not installed" }, async () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-less-"));
-		fs.mkdirSync(path.join(tmp, "base/img"), { recursive: true });
-		fs.mkdirSync(path.join(tmp, "theme"));
-		fs.writeFileSync(path.join(tmp, "base/vars.less"), "@sapColor: #123456;\n.b { background: url('img/x.png'); }\n");
-		fs.writeFileSync(path.join(tmp, "theme/library.source.less"), '@import "../base/vars.less";\n@sapDark: darken(@sapColor, 10%);\n.x { color: @sapDark; }\n');
-		const less = loadLess(fs.readFileSync(LESS_JS, "utf8"));
-		const { css, parameters } = await compileTheme(less, path.join(tmp, "theme/library.source.less"));
-		assert.match(css, /\.x \{\s*color: #091a2c;/);
-		assert.match(css, /url\('\.\.\/base\/img\/x\.png'\)/); // rewritten relative to the entry file
-		assert.deepEqual(parameters, { sapColor: "#123456", sapDark: "#091a2c" });
+	test("buildThemes: cross-library imports, inline parameters, failures are reported", async () => {
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-themes-"));
+		const put = (rel, c) => {
+			fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
+			fs.writeFileSync(path.join(tmp, rel), c);
+		};
+		put("sap/core/themes/t/base.less", "@sapColor: #123456;\n");
+		put("sap/a/themes/t/library.source.less", '@import "../../../core/themes/t/base.less";\n@sapA: darken(@sapColor, 10%);\n.x { color: @sapA; float: left; }\n');
+		put("sap/b/themes/t/library.source.less", '@import "missing.less";\n');
+		const r = await buildThemes(tmp, findThemes(["sap/a/themes/t/library.source.less", "sap/b/themes/t/library.source.less"]));
+		assert.deepEqual(r.compiled, ["sap.a:t"]);
+		assert.equal(r.themeFailures.length, 1);
+		assert.equal(r.themeFailures[0].library, "sap.b");
+		const css = fs.readFileSync(path.join(tmp, "sap/a/themes/t/library.css"), "utf8");
+		assert.match(css, /\.x\{color:#091a2c;float:left\}/);
+		assert.match(css, /#sap-ui-theme-sap\\\.a\{background-image:url\('data:text\/plain;utf-8,/);
+		assert.match(fs.readFileSync(path.join(tmp, "sap/a/themes/t/library-RTL.css"), "utf8"), /float:right/);
+		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(tmp, "sap/a/themes/t/library-parameters.json"), "utf8")), { sapA: "#091a2c" });
+		assert.match(fs.readFileSync(path.join(tmp, "sap/a/themes/t/css_variables.css"), "utf8"), /--sapA:#091a2c/);
 		fs.rmSync(tmp, { recursive: true, force: true });
 	});
 });
 
-describe("build (integration)", () => {
+describe("esm step (integration)", () => {
 	test("tiny fake node_modules", async () => {
 		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-"));
 		const put = (rel, content) => {
@@ -254,7 +282,12 @@ describe("build (integration)", () => {
 			fs.mkdirSync(path.dirname(f), { recursive: true });
 			fs.writeFileSync(f, content);
 		};
-		const pkg = (name) => put(`node_modules/@openui5/${name}/package.json`, JSON.stringify({ name: `@openui5/${name}`, version: "9.9.9" }));
+		const pkg = (name) => {
+			put(`node_modules/@openui5/${name}/package.json`, JSON.stringify({ name: `@openui5/${name}`, version: "9.9.9" }));
+			put(`node_modules/@openui5/${name}/LICENSE.txt`, "Apache License 2.0\n");
+			put(`node_modules/@openui5/${name}/THIRDPARTY.txt`, name === "pkg.b" ? "other components\n" : "components\n");
+			put(`node_modules/@openui5/${name}/LICENSES/MIT.txt`, "MIT\n");
+		};
 		pkg("pkg.a");
 		pkg("pkg.b");
 		pkg("pkg.typings");
@@ -263,9 +296,10 @@ describe("build (integration)", () => {
 		put(A + "sap/a/A.js", 'sap.ui.define(["./B"], function(B) { "use strict"; return { b: B }; });\n');
 		put(A + "sap/a/B.js", 'sap.ui.define([], function() { return 1; });\n');
 		put(A + "sap/a/A-dbg.js", "never copied");
-		put(A + "sap/a/thirdparty/lib.js", "window.lib = { define: sap.ui.define };\n");
-		put(A + "sap/a/thirdparty/used.js", "window.usedLib = 42;\n");
-		put(A + "sap/a/thirdparty/dep.js", "window.depLib = 1;\n");
+		put(A + "sap/ui/thirdparty/lib.js", "window.lib = { define: sap.ui.define };\n");
+		put(A + "sap/ui/thirdparty/used.js", "(function (root) { root.usedLib = 42; }(this));\n");
+		put(A + "sap/ui/thirdparty/dep.js", "window.depLib = 1;\n");
+		put(A + "sap/ui/thirdparty/unlisted.js", "window.unlisted = 1;\n");
 		put(A + "ui5loader.js", "/* old loader */ var x = 1;\n");
 		put(A + "ui5loader-autoconfig.js", '(function() { var ui5loader = sap.ui.loader; function helper() { return 2; }\ndefine("sap/x/Inline", [], function() { return helper(); });\n}());\n');
 		put(A + "sap/shared.js", 'sap.ui.define([], function() { return "a"; });\n');
@@ -274,26 +308,36 @@ describe("build (integration)", () => {
 		put(A + "sap/a/.library", "<library><name>sap.a</name><version>9.9.9</version><dependencies><dependency><libraryName>sap.b</libraryName></dependency></dependencies></library>\n");
 		put(A + "sap/a/messagebundle.properties", "x=y\n");
 		put(A + "sap/a/themes/base/library.source.less", "@sapA: #123456;\n.x { color: @sapA; }\n");
-		if (haveLess) put(A + "sap/ui/thirdparty/less.js", fs.readFileSync(LESS_JS, "utf8"));
 		put(B + "sap/shared.js", 'sap.ui.define([], function() { return "b"; });\n');
 		put(B + "sap/same.properties", "k=v\n");
-		put(B + "sap/b/C.js", 'sap.ui.loader.config({ shim: { "sap/a/thirdparty/used": { exports: "usedLib", deps: ["sap/a/thirdparty/dep"] } } });\n' +
-			'sap.ui.define(["sap/a/A", "sap/missing/X", "ext/lib", "sap/a/thirdparty/used"], function(A, X, L, U) { return A; });\n');
+		put(B + "sap/b/C.js", 'sap.ui.loader.config({ shim: { "sap/ui/thirdparty/used": { deps: ["sap/ui/thirdparty/dep"] } } });\n' +
+			'sap.ui.define(["sap/a/A", "sap/missing/X", "ext/lib", "sap/ui/thirdparty/used", "sap/ui/thirdparty/unlisted"], function(A, X, L, U, N) { return A; });\n');
 		put(B + "sap/b/Bad.js", 'sap.ui.define([], function() { return 1; });\nsap.ui.define([], function() { return 2; });\n');
 		put(B + "sap/b/Nested.js", 'sap.ui.define([], function() { if (1) { return 1; } return 2; });\n');
 		put(B + "sap/b/Esm.js", "export default 42;\n");
 		put("node_modules/@openui5/pkg.typings/types/index.d.ts", "");
 
 		const out = path.join(tmp, "dist");
-		const report = await build({ from: tmp, out, scopes: ["openui5"], themes: ["base"], log: () => {} });
-		const outFile = (rel) => path.join(out, rel);
-		const outText = (rel) => fs.readFileSync(outFile(rel), "utf8");
+		const thirdpartyGlobals = { "sap/ui/thirdparty/used": "usedLib", "sap/ui/thirdparty/dep": null };
+		const report = await build({ from: tmp, out, scopes: ["openui5"], themes: ["base"], thirdpartyGlobals, log: () => {} });
+		const esm = (rel) => path.join(out, "esm", rel);
+		const esmText = (rel) => fs.readFileSync(esm(rel), "utf8");
+
+		// layout
+		assert.deepEqual(fs.readdirSync(out).sort(), ["LICENSE", "NOTICE", "esm", "licenses", "reports", "runtime"]);
+		// Apache-2.0 §4: license texts and attribution travel with the output
+		assert.match(fs.readFileSync(path.join(out, "LICENSE"), "utf8"), /Apache License\s+Version 2\.0/);
+		assert.match(fs.readFileSync(path.join(out, "NOTICE"), "utf8"), /OpenUI5[\s\S]*SAP SE[\s\S]*modified/);
+		assert.deepEqual(fs.readdirSync(path.join(out, "reports")).sort(), ["ui5-next-packages.json", "ui5-next-report.json"]);
+		assert.ok(fs.existsSync(path.join(out, "runtime/ui5-next-runtime.js")));
+		assert.deepEqual(JSON.parse(esmText("package.json")), { name: "ui5-next-esm", version: "9.9.9", type: "module" });
 
 		assert.deepEqual(report.packages.map((p) => p.name), ["@openui5/pkg.a", "@openui5/pkg.b"]);
 		assert.deepEqual(report.ignoredPackages.map((p) => p.name), ["@openui5/pkg.typings"]);
-		// converted modules import the runtime first and register themselves
-		assert.equal(outText("sap/a/A.js"), [
-			'import { _register as __ui5_register } from "../../ui5-next-runtime.js";',
+		// converted modules import the runtime (dist/runtime) first and register themselves
+		assert.equal(esmText("sap/a/A.js"), [
+			"/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */",
+			'import { _register as __ui5_register } from "../../../runtime/ui5-next-runtime.js";',
 			'import * as __ui5_self from "./A.js";',
 			'import B from "./B.js";',
 			"",
@@ -302,82 +346,68 @@ describe("build (integration)", () => {
 			'__ui5_register("sap/a/A", __ui5_self);',
 			"",
 		].join("\n"));
-		const c = outText("sap/b/C.js");
-		assert.ok(c.includes('import A from "../a/A.js";\nimport X from "../missing/X.js";\nimport L from "ext/lib";\nimport U from "../a/thirdparty/used.js";\n'));
-		assert.equal(fs.existsSync(outFile("sap/a/A-dbg.js")), false);
-		// collision: first package wins, identical files are not reported
-		assert.match(outText("sap/shared.js"), /"a"/);
+		assert.ok(esmText("sap/b/C.js").includes('import A from "../a/A.js";\nimport X from "../missing/X.js";\nimport L from "ext/lib";\nimport U from "../ui/thirdparty/used.js";\n'));
+		assert.equal(fs.existsSync(esm("sap/a/A-dbg.js")), false);
+
+		// OpenUI5 license files: identical ones once, differing ones per package
+		assert.deepEqual(report.licenseFiles.sort(), ["LICENSE", "NOTICE", "licenses/LICENSES/MIT.txt", "licenses/LICENSE.txt", "licenses/THIRDPARTY.txt", "licenses/pkg.b/THIRDPARTY.txt"].sort());
+
+		// package manifest: every esm file -> package, first package wins
+		const manifest = JSON.parse(fs.readFileSync(path.join(out, "reports/ui5-next-packages.json"), "utf8"));
+		assert.equal(manifest["sap/a/A.js"], "@openui5/pkg.a");
+		assert.equal(manifest["sap/b/C.js"], "@openui5/pkg.b");
+		assert.equal(manifest["sap/shared.js"], "@openui5/pkg.a");
+		assert.equal(manifest["sap/ui/thirdparty/used.orig.js"], "@openui5/pkg.a");
+		assert.equal(manifest["sap/x/Inline.js"], "@openui5/pkg.a"); // extracted from pkg.a's autoconfig
+		assert.equal(manifest["sap/a/themes/base/library.css"], "@openui5/pkg.a");
+		assert.deepEqual(Object.keys(manifest), [...Object.keys(manifest)].sort());
+		assert.match(esmText("sap/shared.js"), /"a"/);
 		assert.deepEqual(report.collisions, [{ file: "sap/shared.js", kept: "@openui5/pkg.a", ignored: "@openui5/pkg.b" }]);
-		// classic scripts: imported/shimmed ones are wrapped, the others copied as is
-		assert.equal(outText("sap/a/thirdparty/lib.js"), "window.lib = { define: sap.ui.define };\n");
-		assert.deepEqual(report.wrappedClassicScripts, ["sap/a/thirdparty/dep.js", "sap/a/thirdparty/used.js"]);
-		assert.ok(report.classicScripts.includes("sap/a/thirdparty/lib.js"));
-		assert.equal(outText("sap/a/thirdparty/used.classic.js"), "window.usedLib = 42;\n");
-		const used = outText("sap/a/thirdparty/used.js");
-		assert.ok(used.includes('import "./dep.js";'));
-		assert.ok(used.includes('await _loadScript(new URL("./used.classic.js", import.meta.url).href);'));
-		assert.ok(used.includes('export default globalThis["usedLib"];'));
-		// legacy bootstrap: copied, reported, and its inline modules extracted
-		assert.equal(outText("ui5loader.js"), "/* old loader */ var x = 1;\n");
+
+		// thirdparty: listed ones wrapped (<name>.orig.js + <name>.js), unlisted imported ones reported
+		assert.deepEqual(report.wrappedThirdparty, ["sap/ui/thirdparty/dep.js", "sap/ui/thirdparty/used.js"]);
+		assert.equal(esmText("sap/ui/thirdparty/used.js"), 'import "./dep.js";\nimport "./used.orig.js";\nexport default globalThis["usedLib"];\n');
+		assert.match(esmText("sap/ui/thirdparty/used.orig.js"), /root\.usedLib = 42; \}\(globalThis\)\);/);
+		assert.deepEqual(report.unwrappedThirdparty, [{ module: "sap/ui/thirdparty/unlisted", firstImportedBy: "sap/b/C.js", suggestedGlobal: null }]);
+		assert.equal(esmText("sap/ui/thirdparty/lib.js"), "window.lib = { define: sap.ui.define };\n");
+		assert.ok(report.classicScripts.includes("sap/ui/thirdparty/lib.js"));
+
+		// legacy bootstrap, generated files
 		assert.deepEqual(report.obsoleteBootstrap.sort(), ["ui5loader-autoconfig.js", "ui5loader.js"]);
-		assert.deepEqual(report.extracted, ["sap/x/Inline.js", "ui5-next-bootstrap.js"]);
-		assert.match(outText("sap/x/Inline.js"), /function helper\(\) \{ return 2; \}[\s\S]*export default helper\(\);/);
-		assert.match(outText("ui5-next-bootstrap.js"), /import "\.\/sap\/x\/Inline\.js";/);
-		assert.equal(outText("sap/a/view.xml"), "<mvc:View/>\n");
-		// generated: library manifest, version info, themes
-		const manifest = JSON.parse(outText("sap/a/manifest.json"));
-		assert.deepEqual(manifest["sap.ui5"].dependencies.libs, { "sap.b": {} });
-		assert.equal(JSON.parse(outText("sap-ui-version.json")).version, "9.9.9");
-		if (haveLess) {
-			assert.deepEqual(report.themes.compiled, ["sap.a:base"]);
-			assert.match(outText("sap/a/themes/base/library.css"), /color: #123456;[\s\S]*#sap-ui-theme-sap\\.a\{/);
-			assert.deepEqual(JSON.parse(outText("sap/a/themes/base/library-parameters.json")), { sapA: "#123456" });
-		}
-		// a factory with a nested return is kept as a function; multiple defines are skipped
-		assert.match(outText("sap/b/Nested.js"), /export default \(function\(\) \{ if \(1\)/);
+		assert.deepEqual(report.extracted, ["sap/x/Inline.js", "ui5-next-autoconfig.js"]);
+		assert.match(esmText("ui5-next-autoconfig.js"), /import "\.\/sap\/x\/Inline\.js";/);
+		// the app-facing bootstrap of the esm tree
+		assert.match(esmText("ui5-next-bootstrap.js"), /import "\.\/ui5-next-setup\.js";\nimport Core from "\.\/sap\/ui\/core\/Core\.js";/);
+		assert.match(esmText("ui5-next-setup.js"), /from "\.\.\/runtime\/ui5-next-runtime\.js"/);
+		assert.match(esmText("sap/x/Inline.js"), /function helper\(\) \{ return 2; \}[\s\S]*export default helper\(\);/);
+		assert.deepEqual(JSON.parse(esmText("sap/a/manifest.json"))["sap.ui5"].dependencies.libs, { "sap.b": {} });
+		assert.equal(JSON.parse(esmText("sap-ui-version.json")).version, "9.9.9");
+		// themes (less-openui5), next to the sources
+		assert.deepEqual(report.themes.compiled, ["sap.a:base"]);
+		assert.deepEqual(report.themeFailures, []);
+		assert.match(esmText("sap/a/themes/base/library.css"), /\.x\{color:#123456\}[\s\S]*#sap-ui-theme-sap\\\.a\{/);
+		assert.deepEqual(JSON.parse(esmText("sap/a/themes/base/library-parameters.json")), { sapA: "#123456" });
+		assert.ok(fs.existsSync(esm("sap/a/themes/base/css_variables.css")));
+
+		// fallbacks and skips
+		assert.match(esmText("sap/b/Nested.js"), /export default \(function\(\) \{ if \(1\)/);
 		assert.equal(report.skipped.length, 1);
 		assert.equal(report.skipped[0].file, "sap/b/Bad.js");
-		assert.match(report.skipped[0].reason, /multiple sap\.ui\.define/);
-		assert.match(outText("sap/b/Bad.js"), /^sap\.ui\.define/);
-		// ES module copied unchanged
-		assert.equal(outText("sap/b/Esm.js"), "export default 42;\n");
+		assert.equal(esmText("sap/b/Esm.js"), "export default 42;\n");
 		assert.equal(report.stats.unchanged, 1);
 		assert.equal(report.stats.converted, 7); // A, B, shared, C, Nested, Inline, bootstrap
-		// imports
 		assert.deepEqual(report.unresolvedImports, [{ target: "sap/missing/X.js", firstImportedBy: "sap/b/C.js" }]);
 		assert.deepEqual(report.externalSpecifiers, { "ext/lib": 1 });
-		// extra files
-		assert.deepEqual(JSON.parse(outText("package.json")), { name: "ui5-next", version: "9.9.9", type: "module" });
-		for (const f of ["ui5-next-runtime.js", "ui5-next-boot.js", "ui5-next-report.json"]) assert.ok(fs.existsSync(outFile(f)), f);
 
-		// non-empty out dir needs --force, --clean refuses dangerous targets
-		await assert.rejects(build({ from: tmp, out, scopes: ["openui5"], themes: [], log: () => {} }), /not empty/);
-		await build({ from: tmp, out, scopes: ["openui5"], force: true, themes: [], log: () => {} });
-		await assert.rejects(build({ from: tmp, out: tmp, scopes: ["openui5"], clean: true, log: () => {} }), /--clean refused/);
+		// non-empty esm/ needs --force, --clean refuses dangerous targets
+		await assert.rejects(build({ from: tmp, out, scopes: ["openui5"], themes: [], thirdpartyGlobals, log: () => {} }), /not empty/);
+		await build({ from: tmp, out, scopes: ["openui5"], force: true, themes: [], thirdpartyGlobals, log: () => {} });
+		assert.throws(() => removeDir(tmp, tmp), /--clean refused: .* the --from directory/);
+		fs.mkdirSync(path.join(tmp, "x/node_modules"), { recursive: true });
+		assert.throws(() => removeDir(path.join(tmp, "x"), path.join(tmp, "elsewhere")), /contains node_modules/);
+		assert.throws(() => removeDir(process.cwd()), /current directory/);
 		await assert.rejects(build({ from: tmp, out, scopes: ["nope"], log: () => {} }), (e) => e.code === "NO_PACKAGES");
 
-		fs.rmSync(tmp, { recursive: true, force: true });
-	});
-});
-
-describe("runtime shim", () => {
-	test("require/toUrl", async () => {
-		const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-rt-")));
-		fs.copyFileSync(fileURLToPath(new URL("../src/runtime.js", import.meta.url)), path.join(tmp, "ui5-next-runtime.js"));
-		fs.writeFileSync(path.join(tmp, "package.json"), '{"type":"module"}');
-		fs.mkdirSync(path.join(tmp, "my"));
-		fs.writeFileSync(path.join(tmp, "my/Mod.js"), "export default { hello: 'world' };\n");
-		const rt = await import(new URL("file://" + path.join(tmp, "ui5-next-runtime.js")).href);
-		assert.equal(globalThis.sap.ui.require, rt.require);
-		assert.equal(rt.require("my/Mod"), undefined);
-		const got = await rt.require(["my/Mod"], (M) => M.hello);
-		assert.equal(got, "world");
-		assert.equal(rt.require("my/Mod").hello, "world");
-		assert.equal(rt.toUrl("my/x.css"), new URL("file://" + path.join(tmp, "my/x.css")).href);
-		assert.throws(() => rt.require(["./rel"]), /relative module name/);
-		let failed;
-		await rt.require(["my/Nope"], () => {}, (e) => (failed = e));
-		assert.ok(failed);
 		fs.rmSync(tmp, { recursive: true, force: true });
 	});
 });

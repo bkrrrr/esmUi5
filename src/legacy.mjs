@@ -154,28 +154,89 @@ export function shimConfigOf(code) {
 	return shim;
 }
 
+const globalExpr = (global) =>
+	global.split(".").map((p, i) => (i === 0 ? `globalThis[${JSON.stringify(p)}]` : `?.[${JSON.stringify(p)}]`)).join("");
+
 /**
- * ES module wrapper for a classic script: loads its shim dependencies, runs the original
- * file as a classic script (so `this`, sloppy mode and globals behave as before) and
- * exports the global named by the shim config.
+ * ES module wrapper for a thirdparty UMD/global script listed in src/thirdparty-globals.json:
+ *   import "./<dep>.js"; ...        (loader shim deps, e.g. jQuery before jQuery UI)
+ *   import "./<name>.orig.js";
+ *   export default globalThis["<global>"];
+ * @param {{origFile: string, global: string|null, depSpecs?: string[]}} opts
  */
-export function classicWrapper({ classicFile, deps = [], exports, runtimeSpec, depSpecs }) {
-	const lines = [
-		`/* UI5 Next: ES module wrapper; the original classic script is ./${classicFile} */`,
-		`import { _loadScript } from ${JSON.stringify(runtimeSpec)};`,
-		...deps.map((d) => `import ${JSON.stringify(depSpecs(d))};`),
-		``,
-		`await _loadScript(new URL(${JSON.stringify("./" + classicFile)}, import.meta.url).href);`,
-		``,
-	];
-	if (exports) {
-		const pathExpr = exports.split(".").map((p, i) => (i === 0 ? `globalThis[${JSON.stringify(p)}]` : `?.[${JSON.stringify(p)}]`)).join("");
-		lines.push(`export default ${pathExpr};`);
-	} else {
-		lines.push(`export default undefined;`);
-	}
-	return lines.join("\n") + "\n";
+export function thirdpartyWrapper({ origFile, global, depSpecs = [] }) {
+	return [
+		...depSpecs.map((s) => `import ${JSON.stringify(s)};`),
+		`import ${JSON.stringify("./" + origFile)};`,
+		`export default ${global ? globalExpr(global) : "undefined"};`,
+		"",
+	].join("\n");
 }
+
+/**
+ * The <name>.orig.js file: the original script, run the way a classic <script> runs it as far as
+ * ES modules allow. `this` is globalThis (UMD wrappers like URI.js pass `this` as the root) and the
+ * listed global is published if the script only declared it (`var html = ...` stays module-local
+ * otherwise). module/exports/define/require are shadowed with undefined, so UMD headers take their
+ * browser-global path, and bundlers do not treat the file as CommonJS (which would make jQuery
+ * skip setting window.jQuery). Module code is strict, so scripts that rely on sloppy mode fail.
+ */
+/**
+ * Sloppy-mode `this` that strict module code would turn into undefined: `this` at top level and
+ * inside directly invoked function expressions (IIFEs, `(function(){...})()` /
+ * `(function(){...}).call(this)` excluded) is the global object in a classic script, so it
+ * becomes `globalThis`; so does `this` passed as an argument to an IIFE (`})(jQuery, this)`).
+ * `this` in methods, constructors and callbacks is left alone.
+ */
+export function globalizeSloppyThis(src) {
+	let ast;
+	try {
+		ast = parse(src, "script");
+	} catch {
+		return src;
+	}
+	const edits = [];
+	const visit = (node, globalThisCtx, parent) => {
+		if (!node || typeof node.type !== "string") return;
+		if (node.type === "ThisExpression") {
+			// `(function (root) {...})(this)`: the idiom for passing the global object
+			const iifeArg = parent?.type === "CallExpression" && parent.arguments.includes(node) && parent.callee.type === "FunctionExpression";
+			if (globalThisCtx || iifeArg) edits.push(node);
+			return;
+		}
+		let ctx = globalThisCtx;
+		if (node.type === "FunctionExpression" || node.type === "FunctionDeclaration") {
+			// an IIFE called plainly: f() — not f.call(x)/f.apply(x), not new f()
+			ctx = node.type === "FunctionExpression" && parent?.type === "CallExpression" && parent.callee === node;
+		}
+		if (node.type === "PropertyDefinition" || node.type === "StaticBlock" || node.type === "ClassBody") ctx = false;
+		for (const key in node) {
+			if (key === "loc") continue;
+			const v = node[key];
+			if (Array.isArray(v)) v.forEach((c) => visit(c, ctx, node));
+			else if (v && typeof v.type === "string") visit(v, ctx, node);
+		}
+	};
+	visit(ast, true, null);
+	edits.sort((a, b) => b.start - a.start);
+	let out = src;
+	for (const e of edits) out = out.slice(0, e.start) + "globalThis" + out.slice(e.end);
+	return out;
+}
+
+export function origEnvelope(src, global) {
+	src = globalizeSloppyThis(src);
+	const simple = global && /^[A-Za-z_$][\w$]*$/.test(global) ? global : null;
+	return (
+		`/* Modified by ui5-next: the original script, wrapped to run as an ES module (this === globalThis). */\n` +
+		`(function (module, exports, define, require) {\n${src.replace(/\s*$/, "")}\n` +
+		(simple ? `;if (typeof ${simple} !== "undefined" && globalThis[${JSON.stringify(simple)}] === undefined) globalThis[${JSON.stringify(simple)}] = ${simple};\n` : "") +
+		`}).call(globalThis);\n`
+	);
+}
+
+/** Apache-2.0 §4(b): modified files carry a notice that they were changed. */
+export const MODIFIED_NOTICE = "/* Modified by ui5-next: converted from the OpenUI5 AMD source to an ES module. */";
 
 const LEADING_COMMENTS = /^(?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*))*[ \t]*\r?\n?/;
 
@@ -187,6 +248,7 @@ export function addRegistration(code, moduleName, runtimeSpec, selfSpec) {
 	const head = code.match(LEADING_COMMENTS)[0];
 	return (
 		head +
+		`${MODIFIED_NOTICE}\n` +
 		`import { _register as __ui5_register } from ${JSON.stringify(runtimeSpec)};\n` +
 		`import * as __ui5_self from ${JSON.stringify(selfSpec)};\n` +
 		code.slice(head.length).replace(/\s*$/, "\n") +

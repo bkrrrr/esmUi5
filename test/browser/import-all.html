@@ -4,9 +4,9 @@
 	<meta charset="utf-8">
 	<title>UI5 Next: import every module</title>
 	<script type="module">
-		import { boot } from "../dist/ui5-next-boot.js";
+		import { ready } from "../../dist/esm/ui5-next-bootstrap.js";
 
-		await boot({ theme: "sap_horizon" });
+		await ready;
 		const list = await (await fetch("./import-all.json")).json();
 		const failures = [];
 		let done = 0;
@@ -15,7 +15,7 @@
 			while (queue.length) {
 				const m = queue.shift();
 				try {
-					await import(`../dist/${m}`);
+					await import(`../../dist/esm/${m}`);
 				} catch (e) {
 					failures.push({ module: m, error: String(e?.message ?? e).slice(0, 300) });
 				}
