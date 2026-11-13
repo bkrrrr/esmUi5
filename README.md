@@ -23,12 +23,14 @@ are available at `/esm/` and `/bundles/`.
 ## CI and releases
 
 Pushes and pull requests to `main` run the build and tests on Node 26, with npm dependency caching.
-Each run makes the generated `dist/` files available as a downloadable GitHub Actions artifact.
+Each successful run makes the generated `dist/` files available as a downloadable GitHub Actions
+artifact.
 
-Releasing is manual: run the **Build, test and deploy** workflow from `main` and provide a new
-semantic version. It publishes that version to npm and creates a GitHub Release with the same
-package tarball attached. Ordinary commits never publish a new version. The deploy job requires
-the repository's `NPM_TOKEN` secret.
+Releasing does not rebuild. Run **Deploy existing build** from `main` and provide a new semantic
+version. The workflow selects the latest successful **Build and test** run on `main`, downloads
+its artifact, publishes it to npm, and creates a GitHub Release with the same package tarball
+attached. Ordinary commits never publish a new version. The deploy workflow requires the
+repository's `NPM_TOKEN` secret.
 
 ## Output
 
