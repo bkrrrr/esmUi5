@@ -39,6 +39,24 @@ repository's `NPM_TOKEN` secret.
 - `dist/runtime/` — runtime support for UI5's by-name module loading
 - `dist/demo/` — the same Todo app using either output
 
+## Class-style controllers
+
+Export a native class from a `*.controller.js` module. esmUi5 derives the UI5 controller name from
+the module path and adapts its methods when UI5 loads it by name:
+
+```js
+export default class {
+	onInit() {
+		this.model = this.getOwnerComponent().getModel();
+	}
+}
+```
+
+No class name, `extends`, `super()`, or controller factory call is needed. The class supplies
+prototype methods; UI5 still receives a metadata-aware controller constructor, not an instance.
+Initialize controller state in lifecycle methods rather than a class constructor or instance
+fields.
+
 Import the bootstrap before UI5 modules:
 
 ```js

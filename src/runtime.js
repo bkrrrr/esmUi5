@@ -1,7 +1,7 @@
 // esmUi5 runtime shim (dist/runtime/esm-ui5-runtime.js): the loader API for dynamic code
 // (view/controller names, lazy libraries) plus the small part of the legacy loader API
-// (sap.ui.loader) that UI5 itself still calls. Dependency free. It does not recreate
-// namespace globals (sap.m.Button, ...).
+// (sap.ui.loader) that UI5 itself still calls. It does not recreate namespace globals
+// (sap.m.Button, ...).
 //
 //   init({ mode: "esm" | "bundles", esmBase, bundlesBase, paths })
 //
@@ -109,6 +109,64 @@ function valueOf(entry) {
 	}
 }
 
+const CONTROLLER_MODULE = "sap/ui/core/mvc/Controller";
+const CONTROLLER_METADATA_NAME = "sap.ui.core.mvc.Controller";
+const CONTROLLER_SUFFIX = ".controller";
+
+function isNativeController(name, value) {
+	if (!name.endsWith(CONTROLLER_SUFFIX) || typeof value !== "function" || !value.prototype) return false;
+	if (!/^class\b/.test(Function.prototype.toString.call(value))) return false;
+	const metadata = value.getMetadata?.();
+	return !metadata || (typeof metadata.getName === "function" && metadata.getName() === CONTROLLER_METADATA_NAME);
+}
+
+function controllerMethods(Implementation, Controller) {
+	const methods = [];
+	const seen = new Set();
+	for (
+		let prototype = Implementation.prototype;
+		prototype && prototype !== Object.prototype && prototype !== Controller.prototype;
+		prototype = Object.getPrototypeOf(prototype)
+	) {
+		for (const method of Object.getOwnPropertyNames(prototype)) {
+			if (method === "constructor" || seen.has(method)) continue;
+			const descriptor = Object.getOwnPropertyDescriptor(prototype, method);
+			if (!("value" in descriptor)) {
+				throw new TypeError(`esm-ui5-runtime: controller class uses accessor "${method}"; use a method instead`);
+			}
+			if (typeof descriptor.value !== "function") {
+				throw new TypeError(`esm-ui5-runtime: controller class member "${method}" is not a method`);
+			}
+			methods.push([method, descriptor.value]);
+			seen.add(method);
+		}
+	}
+	return Object.fromEntries(methods);
+}
+
+function createTypedController(name, Implementation, Controller) {
+	if (typeof Controller?.extend !== "function" || !Controller.prototype) {
+		throw new TypeError("esm-ui5-runtime: sap/ui/core/mvc/Controller does not support typed controllers");
+	}
+	const controllerName = name.slice(0, -CONTROLLER_SUFFIX.length).replace(/\//g, ".");
+	return Controller.extend(controllerName, controllerMethods(Implementation, Controller));
+}
+
+async function adaptController(name, value) {
+	if (!isNativeController(name, value)) return value;
+	const Controller = await load(CONTROLLER_MODULE);
+	return createTypedController(name, value, Controller);
+}
+
+function adaptControllerSync(name, value) {
+	if (!isNativeController(name, value)) return value;
+	const Controller = valueOf(cache.get(CONTROLLER_MODULE));
+	if (!Controller) return undefined;
+	const TypedController = createTypedController(name, value, Controller);
+	cache.set(name, { value: TypedController });
+	return TypedController;
+}
+
 function loadModulesJson() {
 	modulesJson ??= Promise.resolve(state.fetch(new URL("modules.json", state.bundlesBase).href)).then((r) => {
 		if (!r.ok) throw new Error(`esm-ui5-runtime: cannot load ${state.bundlesBase}modules.json (${r.status})`);
@@ -161,11 +219,13 @@ async function resolve(n) {
 /** Load one module by name; resolves with its default export. Cached by name. */
 export function load(name) {
 	const n = moduleName(name);
-	if (cache.has(n)) return Promise.resolve(valueOf(cache.get(n)));
+	const cached = cache.has(n) ? valueOf(cache.get(n)) : undefined;
+	if (cache.has(n) && !isNativeController(n, cached)) return Promise.resolve(cached);
 	if (!pending.has(n)) {
-		pending.set(n, resolve(n).then(
+		const source = cache.has(n) ? Promise.resolve(cached) : resolve(n);
+		pending.set(n, source.then((original) => adaptController(n, original)).then(
 			(value) => {
-				if (!cache.has(n)) cache.set(n, { value });
+				if (value !== cached || !cache.has(n)) cache.set(n, { value });
 				pending.delete(n);
 				return valueOf(cache.get(n));
 			},
@@ -189,7 +249,14 @@ export function _register(name, namespace) {
  * require("a/b") -> default export if already loaded, else undefined.
  */
 export function require(names, cb, errCb) {
-	if (typeof names === "string") return valueOf(cache.get(moduleName(names)));
+	if (typeof names === "string") {
+		const n = moduleName(names);
+		if (!cache.has(n)) return undefined;
+		const value = valueOf(cache.get(n));
+		if (!isNativeController(n, value)) return value;
+		if (pending.has(n)) return undefined;
+		return adaptControllerSync(n, value);
+	}
 	names.forEach(moduleName); // relative names throw synchronously
 	return Promise.all(names.map(load)).then(
 		(values) => (typeof cb === "function" ? cb(...values) : values),
