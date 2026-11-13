@@ -26,6 +26,7 @@
     "serve": "node bin/ui5-next.mjs serve --out dist/demo",
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-dist.mjs dist/esm",
+    "check:build-report": "node scripts/check-build-report.mjs",
     "smoke": "node scripts/smoke.mjs test/browser/button.html && node scripts/smoke.mjs test/browser/xmlview.html",
     "import-all": "node scripts/import-all.mjs",
     "benchmark": "node scripts/benchmark.mjs"

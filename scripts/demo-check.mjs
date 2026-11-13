@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // demo:check — serves dist/ and loads both demo pages in headless Chrome/Chromium with
 // --dump-dom and a virtual-time budget; asserts that the rendered DOM contains the app title
-// and a rendered list item. No extra dependency. Without a browser: "skipped", exit 0.
+// and a rendered list item. No extra dependency. Without a browser: "skipped", exit 0 unless
+// REQUIRE_BROWSER=1.
 //   CHROME_BIN=/path/to/chrome   use this browser
 //   DIST=<dir>                    serve another dist folder (bundle:compare uses this)
 import { spawn } from "node:child_process";
@@ -50,30 +51,34 @@ function dumpDom(browser, url) {
 	});
 }
 
-async function main() {
-	const browser = findBrowser();
+export async function main({ browser = findBrowser(), distDir = dist, required = process.env.REQUIRE_BROWSER === "1" } = {}) {
 	if (!browser) {
+		if (required) {
+			console.error("demo:check requires Chrome/Chromium, but none was found");
+			return 1;
+		}
 		console.log("demo:check skipped: no Chrome/Chromium found (set CHROME_BIN to a Chrome or Chromium binary)");
 		return 0;
 	}
 	for (const p of PAGES) {
-		if (!fs.existsSync(path.join(dist, p))) {
-			console.error(`demo:check: ${path.join(dist, p)} missing; run npm run build first`);
+		if (!fs.existsSync(path.join(distDir, p))) {
+			console.error(`demo:check: ${path.join(distDir, p)} missing; run npm run build first`);
 			return 1;
 		}
 	}
-	const server = createStaticServer(dist);
+	const server = createStaticServer(distDir);
 	await new Promise((r) => server.listen(0, r));
 	const base = `http://localhost:${server.address().port}/`;
 	console.log(`demo:check with ${browser}`);
 	let failed = 0;
 	for (const p of PAGES) {
 		const t0 = Date.now();
-		const { dom } = await dumpDom(browser, base + p);
+		const { code, dom } = await dumpDom(browser, base + p);
 		const r = checkDom(dom);
 		console.log(`  ${r.ok ? "ok  " : "FAIL"} ${p}: title ${r.title ? "rendered" : "missing"}, ${r.listItems} list items (${Date.now() - t0} ms)`);
+		if (code !== 0) console.error(`       Chrome exited with status ${code}`);
 		if (r.error) console.log(`       error: ${r.error.split("\n").slice(0, 4).join("\n              ")}`);
-		if (!r.ok) failed++;
+		if (!r.ok || code !== 0) failed++;
 	}
 	server.close();
 	return failed ? 1 : 0;

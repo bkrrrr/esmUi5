@@ -11,7 +11,7 @@ import {
 	prefixMap, packageOfName, lazyRegistrySource, stubSource, chunkKind, bundlesBootstrapSources,
 } from "../src/bundle.mjs";
 import { init, require as rtRequire, load, toUrl, _reset } from "../src/runtime.js";
-import { checkDom } from "../scripts/demo-check.mjs";
+import { checkDom, main as runDemoCheck } from "../scripts/demo-check.mjs";
 import { createStaticServer } from "../src/serve.mjs";
 import { bootstrapFiles } from "../src/bootstrap.mjs";
 import { parse } from "../src/convert.mjs";
@@ -278,6 +278,10 @@ describe("demo check and server", () => {
 		const failed = checkDom('<pre id="ui5-next-error">UI5 Next demo failed: TypeError: x &lt;y&gt;</pre>');
 		assert.equal(failed.ok, false);
 		assert.equal(failed.error, "UI5 Next demo failed: TypeError: x <y>");
+	});
+	test("required browser check fails instead of silently skipping", async () => {
+		assert.equal(await runDemoCheck({ browser: null, required: true }), 1);
+		assert.equal(await runDemoCheck({ browser: null, required: false }), 0);
 	});
 	test("static server: MIME types, no-store, 404, no path traversal", async () => {
 		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui5next-serve-"));

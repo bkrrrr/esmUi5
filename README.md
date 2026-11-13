@@ -12,6 +12,8 @@ Requires Node.js 24 or newer.
 npm ci
 npm run build
 npm test
+npm run check
+npm run check:build-report # compare conversion warnings and unresolved imports to reviewed baseline
 npm run serve
 ```
 

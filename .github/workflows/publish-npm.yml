@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: New package version (for example, 1.2.3)
+        description: New semantic version (for example, 1.2.3)
         required: true
         type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Publish must be dispatched from main (got $GITHUB_REF)." >&2
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -23,11 +29,25 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm test
-      - name: Set release version
+      - run: npm run build
+      - run: npm run check
+      - run: npm run check:build-report
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+      - run: npm run demo:check
+        env:
+          REQUIRE_BROWSER: "1"
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Validate and set release version
         env:
           VERSION: ${{ inputs.version }}
         run: npm version "$VERSION" --no-git-tag-version
       - name: Publish package
-        run: npm publish
+        run: npm publish --ignore-scripts --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Record release source
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "Published ui5-next@$VERSION from $GITHUB_SHA on $GITHUB_REF." >> "$GITHUB_STEP_SUMMARY"
