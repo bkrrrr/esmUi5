@@ -26,16 +26,16 @@ Pushes and pull requests to `main` run the build and tests on Node 26, with npm 
 Each successful run makes the generated `dist/` files available as a downloadable GitHub Actions
 artifact.
 
-Releasing does not rebuild. Run **Deploy existing build** from `main` and provide a new semantic
-version. The workflow selects the latest successful **Build and test** run on `main`, downloads
-its artifact, publishes it to npm, and creates a GitHub Release with the same package tarball
-attached. Ordinary commits never publish a new version. The deploy workflow requires the
-repository's `NPM_TOKEN` secret.
+Releasing does not rebuild. Bump the version in `package.json` and commit it to `main`; after its
+**Build and test** run succeeds, manually run **Deploy existing build**. The workflow reads the
+version from that build's `package.json`, downloads its artifact, publishes it to npm, and creates
+a GitHub Release with the same package tarball attached. Ordinary commits never publish a new
+version. The deploy workflow requires the repository's `NPM_TOKEN` secret.
 
 ## Output
 
 - `dist/esm/` — one ES module per UI5 module
-- `dist/bundles/` — shared, lazy-loaded library bundles with matching module paths
+- `dist/bundles/` — shared, lazy-loaded library bundles, loaded by UI5 module name through the runtime
 - `dist/runtime/` — runtime support for UI5's by-name module loading
 - `dist/demo/` — the same Todo app using either output
 

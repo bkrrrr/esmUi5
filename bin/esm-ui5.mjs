@@ -12,7 +12,7 @@ Commands:
   esm      merge @openui5 packages, convert to ES modules, thirdparty wrappers, package
            manifest, themes            -> dist/esm, dist/runtime, dist/reports
   themes   (re)build themes inside dist/esm
-  bundle   one minified file per package (Rolldown)  -> dist/bundles, dist/reports/bundle-report.json
+  bundle   shared lazy chunks (Rolldown) -> dist/bundles, dist/reports/bundle-report.json
   demo     copy the Todo demo           -> dist/demo, dist/README.md
   all      esm + bundle + demo (default)
   serve    static server for dist/ (port 8080)

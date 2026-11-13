@@ -19,7 +19,7 @@
 		addEventListener("unhandledrejection", (e) => showError(e.reason));
 	</script>
 	<script type="module">
-		// UI5 modules come from dist/esm/ (the same paths in esm/ and bundles/).
+		// UI5 modules come from dist/esm/; bundles/ loads modules by name through its registry.
 		// 1. The bootstrap comes first: it configures the runtime and loads the Core before any other UI5 module.
 		import { ready, preload } from "../../esm/esm-ui5-bootstrap.js";
 		import ComponentContainer from "../../esm/sap/ui/core/ComponentContainer.js";

@@ -310,7 +310,7 @@ describe("demo check and server", () => {
 });
 
 describe("bundle step (integration)", () => {
-	test("dependency-cut chunks, facades, lazy execution, no cycles", async () => {
+	test("dependency-cut chunks, name-based loading, lazy execution, no cycles", async () => {
 		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "esm-ui5-bundle-"));
 		const put = (rel, content) => {
 			fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
@@ -342,8 +342,12 @@ describe("bundle step (integration)", () => {
 		// chunks: main bundles per package, sap.a's module that needs sap.b in a side bundle, the cold core part apart
 		assert.deepEqual(report.chunks, { "sap.a": 4, "sap.a+sap.b": 1, "sap.b": 1, "sap.ui.core": 1, "sap.ui.core.lazy": 1 });
 		const top = fs.readdirSync(bundles).filter((f) => f.endsWith(".js")).sort();
-		assert.deepEqual(top.filter((f) => f !== "rolldown-runtime.js"), ["esm-ui5-bootstrap.js", "sap.a.js", "sap.a_sap.b.js", "sap.b.js", "sap.ui.core.js", "sap.ui.core.lazy.js"]);
-		assert.ok(fs.existsSync(path.join(bundles, "sap/b/B.js")) && fs.existsSync(path.join(bundles, "sap/a/Side.js"))); // facades at esm paths
+		assert.ok(top.includes("esm-ui5-bootstrap.js"));
+		assert.ok(top.includes("sap.a.js") && top.includes("sap.a_sap.b.js") && top.includes("sap.b.js"));
+		assert.ok(top.includes("sap.ui.core.js") && top.includes("sap.ui.core.lazy.js"));
+		assert.equal(report.facades.count, 0);
+		assert.equal(fs.existsSync(path.join(bundles, "sap/b/B.js")), false);
+		assert.equal(fs.existsSync(path.join(bundles, "sap/a/Side.js")), false);
 		assert.deepEqual(report.circularImports, []);
 		assert.deepEqual(report.importsBetweenBundles["sap.a.js"].filter((f) => f !== "rolldown-runtime.js"), ["sap.ui.core.js"]); // not sap.b
 		assert.equal(report.minifier, "oxc");
@@ -353,13 +357,13 @@ describe("bundle step (integration)", () => {
 		assert.match(sapA, /\(c\) Copyright Test Corp - Apache-2\.0/);
 		for (const s of report.files) assert.ok(s.raw > 0 && s.minified > 0 && s.gzip > 0 && s.brotli > 0, s.file);
 
-		// run in Node: a facade runs exactly its module (and dependencies)
+		// run in Node: load modules through the name registry (without per-module output files)
 		fs.writeFileSync(path.join(out, "package.json"), '{"type":"module"}');
 		const url = (rel) => pathToFileURL(path.join(bundles, rel)).href;
 		const { require: bundlesRequire, ready } = await import(url("esm-ui5-bootstrap.js"));
 		await ready;
 		assert.equal(globalThis.__coreRuns, 1);
-		assert.deepEqual((await import(url("sap/b/B.js"))).default, { uses: "A", helper: "A!", glob: 7 });
+		assert.deepEqual(await bundlesRequire(["sap/b/B"]), [{ uses: "A", helper: "A!", glob: 7 }]);
 		assert.equal(globalThis.__sideRuns, undefined); // in sap.a.js, but nobody needed it
 		assert.equal(globalThis.__coldRuns, undefined);
 		// by name: lazy registry, import() inside the package chunk

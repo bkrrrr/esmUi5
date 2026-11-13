@@ -7,13 +7,15 @@
 </head>
 <body>
 	<h1>esmUi5 demos</h1>
-	<p>The same Todo app (Component, manifest.json, i18n, XML view, controller), twice. Both import UI5 with
-	plain <code>import</code> statements, no loader, no import map, no bundler at runtime.</p>
+	<p>The same Todo app (Component, manifest.json, i18n, XML view, controller), twice. Both use browser
+	ES modules without a UI5 CDN loader or app bundler; esm/ imports UI5 modules by path, while bundles/
+	loads them by name through the esmUi5 runtime.</p>
 	<ul>
 		<li><a href="esm/index.html">esm/</a>: one ES module per UI5 module,
 			<code>import Controller from "../../../esm/sap/ui/core/mvc/Controller.js"</code></li>
-		<li><a href="bundles/index.html">bundles/</a>: one file per npm package,
-			<code>import { "sap/ui/core/mvc/Controller" as Controller } from "../../../bundles/sap.ui.core.registry.js"</code></li>
+		<li><a href="bundles/index.html">bundles/</a>: shared lazy package chunks, no per-module facade
+			files; load UI5 modules by name with
+			<code>require(["sap/ui/core/mvc/Controller"])</code></li>
 	</ul>
 </body>
 </html>

@@ -1,5 +1,6 @@
-import Filter from "../../../bundles/sap/ui/model/Filter.js";
-import FilterOperator from "../../../bundles/sap/ui/model/FilterOperator.js";
+import { require } from "../../../bundles/esm-ui5-bootstrap.js";
+
+const [Filter, FilterOperator] = await require(["sap/ui/model/Filter", "sap/ui/model/FilterOperator"]);
 
 export default class {
 	onInit() {

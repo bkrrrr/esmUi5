@@ -6,10 +6,8 @@
 //                                 libraries the package declares as (non-lazy) dependencies
 //   <pkg>+<other>....js           the package's modules that reach further (e.g. sap.m's flexibility
 //                                 handlers -> sap.ui.fl); loaded only when such a module is needed
-//   sap/m/Button.js, ...          one tiny facade per module, same paths as esm/: a static import
-//                                 runs exactly that module (and its dependencies)
-//   <pkg>.registry.js             lazy registry for loading by name: { "sap/m/Dialog": () => import(...) }
-//   esm-ui5-bootstrap.js         config, runtime (inside sap.ui.core.js), Core
+//   package registry               resolves UI5 module names to lazy imports inside the chunks
+//   esm-ui5-bootstrap.js          config, runtime (inside sap.ui.core.js), Core
 // Every module is wrapped by Rolldown (strictExecutionOrder) and runs only when something needs it,
 // like a module in a UI5 library-preload file.
 import fs from "node:fs";
@@ -402,7 +400,7 @@ async function runRolldown({ input, outDir, groupName, minify, sourcemap, write,
 						return { id: source, external: true }; // only reachable through dynamic imports
 					}
 					// import() of a module: through its stub (no entry), so Rolldown resolves it inside
-					// the chunk instead of loading the module's facade file
+					// the package chunk instead of emitting a module-path facade
 					if (extra?.kind === "dynamic-import" && stubOf.has(real(target))) return stubOf.get(real(target));
 				}
 				return null;
@@ -501,7 +499,6 @@ export async function bundle(opts = {}) {
 	const group = new Map(); // real path -> chunk name
 	const input = {};
 	for (const [rel, chunk] of chunkOf) {
-		input[rel.slice(0, -3)] = esmFile(rel); // facade at the module's own path
 		group.set(real(esmFile(rel)), chunk);
 		const orig = esmFile(rel.replace(/\.js$/, ".orig.js"));
 		if (fs.existsSync(orig)) group.set(real(orig), chunk);

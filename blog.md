@@ -52,14 +52,15 @@ The runtime registers loaded modules and resolves the remaining by-name requests
 the loader APIs that UI5 still calls internally. The build generates the theme CSS and metadata that
 are absent from the npm packages.
 
-There are two outputs with the same module paths:
+There are two outputs with different loading styles:
 
 - **esm/**: one ES module per UI5 module; useful for development.
-- **bundles/**: shared library bundles for pages or launchpads with many apps on one UI5.
+- **bundles/**: shared lazy chunks for pages or launchpads with many apps on one UI5; UI5 modules
+  load by name through the runtime.
 
-The Todo demo uses each output in a separate page. Both pages statically import their component,
-controller and manifest as well as the UI5 bootstrap and modules. This lets the browser discover
-the app's dependency graph up front.
+The Todo demo uses each output in a separate page. Both pages statically import their app component,
+controller and manifest. The esm/ page statically imports UI5 modules too; the bundles/ page asks the
+runtime for UI5 modules by name.
 
 ## Why the first bundles were slow
 
@@ -80,17 +81,15 @@ Three issues explained the result:
 
 The redesign keeps UI5's on-demand behavior:
 
-- Each statically imported module gets a tiny facade at its ESM path. It runs that module and its
-  dependencies, not every module in its bundle.
-- Per-package lazy registries handle loads by name; the package bundle is fetched only when needed.
+- UI5 modules are reached by name through package registries; no per-module facade files are emitted.
+- Shared package chunks are fetched only when needed.
 - Chunks follow declared library dependencies, with side bundles for dependencies that cross those
   boundaries. This removes circular imports between bundles.
 - The Core is split into its boot path, code other libraries need, and a lazy remainder.
 - The bootstrap imports the shared Core pieces in parallel. The app statically imports its own code.
 
-The final build has 70 bundle files and 4,001 facades. A `Controller`, `Filter` and `FilterOperator`
-import loads five files (1.9 MiB minified) and runs 102 modules, instead of the earlier 12 files
-(9.0 MiB) and thousands of modules.
+The current build emits 72 JavaScript chunk files and no per-module facades. A browser smoke test
+loading `Controller`, `Filter` and `FilterOperator` by name requested four JavaScript files.
 
 ## Results
 
@@ -99,10 +98,10 @@ The same Todo app was tested in headless Chrome over seven runs with the cache d
 
 | | Ready, local | Ready, 4G | Requests | Transferred | Script time |
 |---|---:|---:|---:|---:|---:|
-| **esmUi5, bundles/** | **519 ms** | **1,375 ms** | 26 | **1.71 MiB** | 117 ms |
-| esmUi5, esm/ | 894 ms | 3,203 ms | 464 | 2.19 MiB | 166 ms |
-| Classic UI5, optimized CDN build | 543 ms | 1,658 ms | 24 | 1.88 MiB | 121 ms |
-| Classic UI5, unbuilt npm sources | 1,159 ms | 12,293 ms | 452 | 2.22 MiB | 686 ms |
+| **esmUi5, bundles/** | **636 ms** | **1,396 ms** | **21** | **1.72 MiB** | 128 ms |
+| esmUi5, esm/ | 968 ms | 3,229 ms | 464 | 2.21 MiB | 169 ms |
+| Classic UI5, optimized CDN build | 546 ms | 1,676 ms | 24 | 1.88 MiB | 123 ms |
+| Classic UI5, unbuilt npm sources | 1,212 ms | 12,022 ms | 452 | 2.22 MiB | 680 ms |
 
 The bundles are 17% faster over 4G and transfer 9% less than the optimized classic build. The ESM
 tree needs one request per module, but still loads much faster over 4G than unbuilt classic sources,

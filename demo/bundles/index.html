@@ -19,18 +19,16 @@
 		addEventListener("unhandledrejection", (e) => showError(e.reason));
 	</script>
 	<script type="module">
-		// UI5 modules come from dist/bundles/ (the same paths in esm/ and bundles/).
-		// 1. The bootstrap comes first: it configures the runtime and loads the Core before any other UI5 module.
-		import { ready, preload } from "../../bundles/esm-ui5-bootstrap.js";
-		import ComponentContainer from "../../bundles/sap/ui/core/ComponentContainer.js";
+		// Bundle mode loads UI5 modules by name from shared package chunks.
+		import { ready, preload, require } from "../../bundles/esm-ui5-bootstrap.js";
 
-		// 2. The app's own modules and descriptor, imported statically: the browser fetches them in parallel
-		//    with UI5 instead of discovering them one by one at runtime (the ES module way of Component-preload).
+		// App modules and the descriptor are still native ES modules.
 		import "./Component.js";
 		import manifest from "./manifest.json" with { type: "json" };
 		preload({ "demo/todo/manifest.json": JSON.stringify(manifest) }); // UI5 reads it again by name
 
 		await ready;
+		const [ComponentContainer] = await require(["sap/ui/core/ComponentContainer"]);
 		new ComponentContainer({
 			name: "demo.todo", // UI5 still asks for the component by name; it is already loaded
 			url: ".",

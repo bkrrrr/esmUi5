@@ -4,11 +4,13 @@
 	<meta charset="utf-8">
 	<title>Only the controller imports (bundles/)</title>
 	<script type="module">
-		import Controller from "../../dist/bundles/sap/ui/core/mvc/Controller.js";
-		import Filter from "../../dist/bundles/sap/ui/model/Filter.js";
-		import FilterOperator from "../../dist/bundles/sap/ui/model/FilterOperator.js";
+		import { ready, require } from "../../dist/bundles/esm-ui5-bootstrap.js";
 
 		window.__smoke = async () => {
+			await ready;
+			const [Controller, Filter, FilterOperator] = await require([
+				"sap/ui/core/mvc/Controller", "sap/ui/model/Filter", "sap/ui/model/FilterOperator",
+			]);
 			const res = performance.getEntriesByType("resource");
 			const js = res.filter((r) => r.initiatorType === "script");
 			return {

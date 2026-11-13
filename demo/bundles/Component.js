@@ -1,6 +1,7 @@
-import UIComponent from "../../bundles/sap/ui/core/UIComponent.js";
-// imported statically, so it loads together with the component (the view asks for it by name)
+import { require } from "../../bundles/esm-ui5-bootstrap.js";
 import "./controller/App.controller.js";
+
+const [UIComponent] = await require(["sap/ui/core/UIComponent"]);
 
 export default UIComponent.extend("demo.todo.Component", {
 	metadata: {

@@ -1,6 +1,6 @@
 {
   "name": "esm-ui5",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Builds OpenUI5 into one tree of native ES modules (esmUi5)",
   "type": "module",
   "files": [
@@ -27,7 +27,7 @@
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-dist.mjs dist/esm",
     "check:build-report": "node scripts/check-build-report.mjs",
-    "smoke": "node scripts/smoke.mjs test/browser/button.html && node scripts/smoke.mjs test/browser/xmlview.html",
+    "smoke": "node scripts/smoke.mjs test/browser/button.html && node scripts/smoke.mjs test/browser/xmlview.html && node scripts/smoke.mjs test/browser/bundles-import.html",
     "import-all": "node scripts/import-all.mjs",
     "benchmark": "node scripts/benchmark.mjs"
   },
