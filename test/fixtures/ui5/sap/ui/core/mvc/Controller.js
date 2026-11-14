@@ -1,23 +1,29 @@
-// Fixture for sap/ui/core/mvc/Controller: extend() gives a class with the controller's methods and
+// Fixture for sap/ui/core/mvc/Controller: defineClass() registers a typed subclass with
 // the two framework methods the Todo controller uses. A test passes a fake view.
 export default class Controller {
-	static extend(name, methods) {
-		if (Object.getPrototypeOf(methods) !== Object.prototype) {
-			throw new TypeError("Controller.extend requires a plain methods object");
+	constructor(view) {
+		this.view = view;
+	}
+
+	static defineClass(name, classInfo) {
+		if (!classInfo || typeof classInfo !== "object") {
+			throw new TypeError("Controller.defineClass requires class info");
 		}
-		class TypedController {
-			constructor(view) {
-				this.view = view;
-			}
-			getOwnerComponent() {
-				return this.view.component;
-			}
-			byId(id) {
-				return this.view.byId(id);
-			}
-		}
-		Object.assign(TypedController.prototype, methods);
+		const TypedController = classInfo.constructor;
+		Object.assign(TypedController.prototype, Object.fromEntries(
+			Object.entries(classInfo).filter(([key]) => key !== "constructor" && key !== "metadata")
+		));
 		TypedController.controllerName = name;
-		return TypedController;
+		const metadata = { constructor: TypedController, getName: () => name, getClass: () => TypedController };
+		TypedController.getMetadata = TypedController.prototype.getMetadata = () => metadata;
+		return metadata;
+	}
+
+	getOwnerComponent() {
+		return this.view.component;
+	}
+
+	byId(id) {
+		return this.view.byId(id);
 	}
 }

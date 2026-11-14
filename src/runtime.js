@@ -145,11 +145,14 @@ function controllerMethods(Implementation, Controller) {
 }
 
 function createTypedController(name, Implementation, Controller) {
-	if (typeof Controller?.extend !== "function" || !Controller.prototype) {
+	if (typeof Controller?.defineClass !== "function" || !Controller.prototype) {
 		throw new TypeError("esm-ui5-runtime: sap/ui/core/mvc/Controller does not support typed controllers");
 	}
 	const controllerName = name.slice(0, -CONTROLLER_SUFFIX.length).replace(/\//g, ".");
-	return Controller.extend(controllerName, controllerMethods(Implementation, Controller));
+	class TypedController extends Controller {}
+	const classInfo = { metadata: {}, constructor: TypedController, ...controllerMethods(Implementation, Controller) };
+	Controller.defineClass(controllerName, classInfo, Controller.getMetadata?.().constructor);
+	return TypedController;
 }
 
 async function adaptController(name, value) {

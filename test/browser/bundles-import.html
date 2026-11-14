@@ -14,7 +14,7 @@
 			const res = performance.getEntriesByType("resource");
 			const js = res.filter((r) => r.initiatorType === "script");
 			return {
-				ok: typeof Controller.extend === "function" && typeof Filter === "function" && FilterOperator.EQ === "EQ",
+				ok: typeof Controller.defineClass === "function" && typeof Filter === "function" && FilterOperator.EQ === "EQ",
 				jsRequests: js.length,
 				jsKiB: Math.round(js.reduce((a, r) => a + r.decodedBodySize, 0) / 1024),
 				files: js.map((r) => r.name.replace(location.origin, "")),

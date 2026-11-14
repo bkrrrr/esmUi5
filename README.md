@@ -39,6 +39,14 @@ version. The deploy workflow requires the repository's `NPM_TOKEN` secret.
 - `dist/runtime/` — runtime support for UI5's by-name module loading
 - `dist/demo/` — the same Todo app using either output
 
+## Native UI5 classes
+
+The generated UI5 modules use native JavaScript classes and `extends`/`super`. The UI5 class
+factory APIs `Class.extend()` and `Metadata.createClass()` are not available in the generated
+tree; this is a breaking change for code that defines classes with those APIs. Define an app
+class with native syntax and register its UI5 metadata through the base class's
+`defineClass()` method. Renderer-specific `Renderer.extend()` composition is unchanged.
+
 ## Class-style controllers
 
 Export a native class from a `*.controller.js` module. esmUi5 derives the UI5 controller name from

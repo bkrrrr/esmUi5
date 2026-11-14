@@ -3,8 +3,9 @@
 *Draft*
 
 **TL;DR:** esmUi5 converts OpenUI5 1.154 npm packages into browser-native ES modules and builds
-shared, lazy-loaded library bundles. The same Todo app ran 17% faster over 4G than the classic
-optimized CDN build. This is a proof of concept, not a production replacement.
+shared, lazy-loaded library bundles. In a five-run benchmark, the same Todo app became usable 7%
+faster over 4G than with the classic optimized CDN build, using three fewer requests but
+transferring 3% more data. This is a proof of concept, not a production replacement.
 
 ```js
 import { ready } from "./dist/esm/esm-ui5-bootstrap.js";
@@ -93,19 +94,20 @@ loading `Controller`, `Filter` and `FilterOperator` by name requested four JavaS
 
 ## Results
 
-The same Todo app was tested in headless Chrome over seven runs with the cache disabled. “4G” uses
+The same Todo app was tested in headless Chrome over five runs with the cache disabled. “4G” uses
 40 ms RTT and 20/5 Mbit/s. Values are medians.
 
 | | Ready, local | Ready, 4G | Requests | Transferred | Script time |
 |---|---:|---:|---:|---:|---:|
-| **esmUi5, bundles/** | **636 ms** | **1,396 ms** | **21** | **1.72 MiB** | 128 ms |
-| esmUi5, esm/ | 968 ms | 3,229 ms | 464 | 2.21 MiB | 169 ms |
-| Classic UI5, optimized CDN build | 546 ms | 1,676 ms | 24 | 1.88 MiB | 123 ms |
-| Classic UI5, unbuilt npm sources | 1,212 ms | 12,022 ms | 452 | 2.22 MiB | 680 ms |
+| esmUi5, bundles/ | 689 ms | **1,602 ms** | **21** | 1.94 MiB | 119 ms |
+| esmUi5, esm/ | 1,061 ms | 3,509 ms | 464 | 2.39 MiB | 222 ms |
+| **Classic UI5, optimized CDN build** | **555 ms** | 1,718 ms | 24 | **1.88 MiB** | 122 ms |
+| Classic UI5, unbuilt npm sources | 1,290 ms | 12,899 ms | 452 | 2.22 MiB | 724 ms |
 
-The bundles are 17% faster over 4G and transfer 9% less than the optimized classic build. The ESM
-tree needs one request per module, but still loads much faster over 4G than unbuilt classic sources,
-which fetch synchronously one file at a time.
+The bundles were about 7% faster over 4G and used three fewer requests than the optimized classic
+build, while transferring about 3% more data. Locally, the classic build became usable sooner
+(555 ms versus 689 ms). The ESM tree needs one request per module, but still loads much faster over
+4G than unbuilt classic sources, which fetch synchronously one file at a time.
 
 ## What the conversion exposed
 

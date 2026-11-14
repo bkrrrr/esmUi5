@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { convert, isPlainModule, parse, RUNTIME_DEP } from "./convert.mjs";
+import { transformNativeClasses } from "./native-classes.mjs";
 import { analyseAutoconfig, thirdpartyWrapper, origEnvelope, addRegistration, libraryManifest, shimConfigOf } from "./legacy.mjs";
 import { buildThemes, findThemes, DEFAULT_THEMES } from "./themes.mjs";
 import { writeBootstrap } from "./bootstrap.mjs";
@@ -316,7 +317,14 @@ export async function build(opts = {}) {
 			stats.copied++;
 			continue;
 		}
-		const src = readText(entry);
+		let src = readText(entry);
+		if (!thirdparty) {
+			try {
+				src = transformNativeClasses(src, rel) ?? src;
+			} catch (err) {
+				throw new Error(`native class conversion failed for ${rel}: ${reasonOf(err)}`, { cause: err });
+			}
+		}
 		if (thirdparty && !/\bsap\.ui\.define\s*\(/.test(src) && !isPlainModule(src)) {
 			classic.set(rel, src); // a classic script, possibly using sap.ui.require at runtime
 			continue;
