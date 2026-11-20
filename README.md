@@ -21,7 +21,7 @@ The package ships prebuilt files only (no build step on your side):
 - `demo/` — the Todo demo app, built against both trees
 
 Serve `node_modules/esm-ui5/dist/` with any static web server, or load it from a CDN such as
-`https://cdn.jsdelivr.net/npm/esm-ui5@0.1.1/dist/`.
+`https://cdn.jsdelivr.net/npm/esm-ui5@0.1.2/dist/`.
 
 ## Usage
 
