@@ -1,6 +1,6 @@
 {
   "name": "esm-ui5",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Builds OpenUI5 into one tree of native ES modules (esmUi5)",
   "repository": {
     "type": "git",

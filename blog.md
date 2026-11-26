@@ -7,6 +7,9 @@ shared, lazy-loaded library bundles. In a five-run benchmark, the same Todo app 
 faster over 4G than with the classic optimized CDN build, using three fewer requests but
 transferring 3% more data. This is a proof of concept, not a production replacement.
 
+*Update, 0.1.3:* esmUi5 no longer loads fonts or locale data from other hosts; see the last point
+under "What the conversion exposed".
+
 ```js
 import { ready } from "./dist/esm/esm-ui5-bootstrap.js";
 import Button from "./dist/esm/sap/m/Button.js";
@@ -123,6 +126,11 @@ The conversion made several existing assumptions visible:
   preserve their load order.
 - jQuery Mobile expects top-level `this` to be `window`; in an ES module it is `undefined`. Its
   wrapper restores the browser-global behavior. Not every legacy script can be wrapped safely.
+- Two copies of UI5 Web Components inside `sap.f` and `sap.ui.integration` load SAP's 72 font from
+  `cdn.jsdelivr.net` and locale data from `sdk.openui5.org` by default. Classic UI5 usually avoids
+  the font requests because the components detect the UI5 core. In the EU, sending visitors' IP
+  addresses to another host needs a legal basis, so since 0.1.3 the build uses the font and locale
+  data that ship with the package instead, and a check fails if any such request is left.
 
 ## Benefits and limits
 

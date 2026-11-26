@@ -12,3 +12,4 @@ Import the bootstrap first. In `esm/`, import UI5 modules statically by path; in
 `import { ready, require } from "./bundles/esm-ui5-bootstrap.js"; const [Button] = await require(["sap/m/Button"]);`
 Use one tree per page.
 Serve this folder with any static server and open `demo/index.html`.
+No fonts or data are loaded from other hosts: the 72 font and locale data come from this package.

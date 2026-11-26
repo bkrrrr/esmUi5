@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as acorn from "acorn";
+import { cdnLoads } from "../src/no-cdn.mjs";
 
 const dist = path.resolve(process.argv[2] ?? "dist/esm");
 const SAMPLES = ["sap/m/Button.js", "sap/ui/core/Control.js"];
@@ -20,14 +21,23 @@ const parseModule = (src) => acorn.parse(src, { ecmaVersion: "latest", sourceTyp
 
 let total = 0;
 const failures = [];
+const cdn = []; // places that would load from another host (see src/no-cdn.mjs)
 for (const rel of jsFiles(dist)) {
 	total++;
+	const src = fs.readFileSync(path.join(dist, rel), "utf8");
+	for (const hit of cdnLoads(src)) cdn.push(`${rel}: ${hit}`);
 	try {
-		parseModule(fs.readFileSync(path.join(dist, rel), "utf8"));
+		parseModule(src);
 	} catch (err) {
 		failures.push({ file: rel, error: err.message });
 	}
 }
+const bundles = path.join(dist, "../bundles");
+if (fs.existsSync(bundles)) {
+	for (const rel of jsFiles(bundles)) for (const hit of cdnLoads(fs.readFileSync(path.join(bundles, rel), "utf8"))) cdn.push(`bundles/${rel}: ${hit}`);
+}
+console.log(`requests to other hosts: ${cdn.length}`);
+for (const hit of cdn.slice(0, 20)) console.log(`  FAIL ${hit}`);
 console.log(`${total} .js files, ${total - failures.length} parse as ES modules, ${failures.length} do not`);
 for (const f of failures.slice(0, 50)) console.log(`  FAIL ${f.file}: ${f.error}`);
 if (failures.length > 50) console.log(`  ... and ${failures.length - 50} more`);
@@ -55,4 +65,4 @@ for (const rel of SAMPLES) {
 	sampleErrors += bad.length + missing.length;
 }
 
-process.exit(failures.length || sampleErrors ? 1 : 0);
+process.exit(failures.length || sampleErrors || cdn.length ? 1 : 0);

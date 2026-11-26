@@ -10,6 +10,7 @@ import { analyseAutoconfig, thirdpartyWrapper, origEnvelope, addRegistration, li
 import { buildThemes, findThemes, DEFAULT_THEMES } from "./themes.mjs";
 import { writeBootstrap } from "./bootstrap.mjs";
 import { writeLicenses } from "./licenses.mjs";
+import { withoutCdn } from "./no-cdn.mjs";
 
 export { DEFAULT_THEMES };
 
@@ -318,6 +319,12 @@ export async function build(opts = {}) {
 			continue;
 		}
 		let src = readText(entry);
+		// no font or locale data from other hosts (src/no-cdn.mjs)
+		const local = withoutCdn(src);
+		if (local.changes) {
+			src = local.code;
+			stats.noCdn = (stats.noCdn ?? 0) + 1;
+		}
 		if (!thirdparty) {
 			try {
 				src = transformNativeClasses(src, rel) ?? src;

@@ -21,7 +21,8 @@ The package ships prebuilt files only (no build step on your side):
 - `demo/` — the Todo demo app, built against both trees
 
 Serve `node_modules/esm-ui5/dist/` with any static web server, or load it from a CDN such as
-`https://cdn.jsdelivr.net/npm/esm-ui5@0.1.2/dist/`.
+`https://cdn.jsdelivr.net/npm/esm-ui5@0.1.3/dist/`. Served from your own server, esmUi5 makes no
+requests to other hosts (see [below](#no-requests-to-other-hosts)).
 
 ## Usage
 
@@ -89,6 +90,25 @@ export default class {
 
 No class name, `extends`, `super()`, or controller factory call is needed. Initialize controller
 state in lifecycle methods rather than a constructor or instance fields.
+
+## No requests to other hosts
+
+Since 0.1.3, nothing in esmUi5 loads fonts or data from another host. OpenUI5 1.154 contains two
+copies of UI5 Web Components (in `sap.f` and `sap.ui.integration`) that, out of the box, load SAP's
+72 font from `cdn.jsdelivr.net` and English locale data from `sdk.openui5.org` or `cdn.jsdelivr.net`.
+In classic UI5 the font loading is usually skipped because the components detect the UI5 core;
+esmUi5 does not rely on that detection.
+
+Such a request sends the visitor's IP address to another host, which in the EU needs a legal basis;
+a German court awarded damages for loading Google Fonts this way (LG München I, 3 O 17493/20).
+esmUi5 already ships the 72 font with OpenUI5's themes and the locale data, so the build:
+
+- removes the `@font-face` rules that point to the CDN and switches the components' default font
+  loading off (the theme's own `72` font faces apply),
+- loads locale data from the package (`sap.ui.require.toUrl`) instead of a CDN.
+
+The changed files carry a notice saying so. `npm run check` fails if any place that loads from another
+host is left. (If you load esmUi5 itself from a CDN, that CDN still sees your visitors.)
 
 ## Limitations
 
